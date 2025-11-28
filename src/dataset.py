@@ -17,9 +17,14 @@ def mk_raw_dataset():
         "https://challengedata.ens.fr/media/public/test-images.zip",
         "dataset/raw/x-test",
     )
-    label_answer = requests.get("https://challengedata.ens.fr/media/public/label_Hnl61pT.csv")
-    with open("dataset/raw/y-train.csv", "wb") as label_f:
-        label_f.write(label_answer.content)
+    get_and_write_to(
+        "https://challengedata.ens.fr/media/public/annotated_labels.json",
+        "dataset/raw/annotated_labels.json",
+    )
+    get_and_write_to(
+        "https://challengedata.ens.fr/media/public/label_Hnl61pT.csv",
+        "dataset/raw/y-train.csv",
+    )
 
 def get_and_unzip(url: str, path: str | Path):
     path = Path(path)
@@ -50,6 +55,11 @@ def get_and_unzip(url: str, path: str | Path):
             item.rename(path / item.name)
         # Remove the now-empty subfolder
         sub.rmdir()
+
+def get_and_write_to(url: str, path: str):
+    answer = requests.get(url)
+    with open(path, "wb") as f:
+        f.write(answer.content)
 
 if __name__ == "__main__":
     mk_raw_dataset()

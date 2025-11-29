@@ -1,6 +1,5 @@
 Check felzenszwalb
 potential easy win with blurry masks
-use wandb
 Use augmentations to avoid overfittings
 understand why batch_size > 1 breaks training
 use optuna

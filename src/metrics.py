@@ -1,4 +1,6 @@
+import json
 import warnings
+from typing import Optional
 
 import torch
 import numpy as np
@@ -44,6 +46,27 @@ def dice_pandas(y_true_df: pd.DataFrame, y_pred_df: pd.DataFrame, n_classes: int
 
     return float(np.nanmean(cls_dices))
 
+class SegmentationLoss:
+    def __init__(self, cross_entropy_weights: Optional[Tensor]=None, ce_weight: float=0.5, dice_weight: float=0.5):
+        self.ce_weight = ce_weight
+        self.dice_weight = dice_weight
+        self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=cross_entropy_weights)
+    
+    def __call__(self, y_pred: Tensor, y_true: Tensor) -> dict[str, Tensor]:
+        """
+        Computes the weighted average of the cross entropy and dice loss of y pred.
+        ### Returns:
+        Dictionnary of loss_average, ce_loss and dice_loss
+        """
+        ce_loss = self.cross_entropy_loss(y_pred, y_true)
+        d_loss = dice_loss(y_pred, y_true)
+        loss = d_loss * self.dice_weight + ce_loss * self.ce_weight
+        return {
+            "average_loss": loss,
+            "cross_entropy_loss": ce_loss,
+            "dice_loss": d_loss,
+        }
+
 def dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     pred = torch.softmax(pred, dim=1)
     target_one_hot = (
@@ -57,3 +80,20 @@ def dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     union = pred.sum(dim=(2, 3)) + target_one_hot.sum(dim=(2, 3))
     dice = (2. * intersection + smooth) / (union + smooth)
     return 1 - dice.mean()
+
+def get_class_weights() -> torch.Tensor:
+    file_name = "./dataset/raw/annotated_labels.json"
+    with open(file_name, 'r') as file :
+        data = json.load(file)
+
+    flattened_data = []
+    for i in data :
+        flattened_data += i
+
+    labels, labels_count = np.unique(flattened_data, return_counts=True)
+    labels_weights = labels_count / np.sum(labels_count)
+
+    # adding the background
+    labels_weights = np.insert(labels_weights, 0, 0.0001)
+    class_weights = torch.from_numpy(labels_weights).type(torch.float32)
+    return class_weights

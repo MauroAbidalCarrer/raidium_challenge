@@ -1,11 +1,12 @@
 from typing import Optional
 
 import torch
+import numpy as np
 from torch import nn, Tensor
 import matplotlib.pyplot as plt
 
 
-def plot_slice_seg(slice_image, *seg_masks):
+def plt_sample(slice_image, *seg_masks):
     fig, axes = plt.subplots(1, 1 + len(seg_masks))
     fig = fig.set_size_inches(15, 15)
     axes[0].imshow(slice_image, cmap="gray")
@@ -28,13 +29,13 @@ def plt_pred(
     label_test = model(image_test.to(model_device))
     pred_test = torch.argmax(label_test, dim=1)
     if y is not None:
-        plot_slice_seg(
+        plt_sample(
             image_test.squeeze(),
             pred_test.squeeze().cpu().numpy(),
             y[sample_idx],
         )
     else:
-        plot_slice_seg(
+        plt_sample(
             image_test.squeeze(),
             pred_test.squeeze().cpu().numpy(),
         )

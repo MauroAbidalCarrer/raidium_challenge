@@ -1,11 +1,86 @@
+import os
 import shutil
 import zipfile
 from pathlib import Path
 
+import torch
 import requests
+import torchvision
+import pandas as pd
+from torch import Tensor
 
+def main():
+    download_raw_dataset()
+    format_dataset()
 
-def mk_raw_dataset():
+def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
+    """
+    - Loads formatted dataset 
+    - Standardizes the x train and test by their combined mean/std 
+      Since we have access to the x test we can "leak" its stats into the training.
+    - Removes the train samples without labels
+
+    Returns:
+        tuple[Tensor, Tensor, Tensor]: x_train, y_train, x_test
+    """
+    y_train: Tensor = torch.load("dataset/formatted/y-train.pt")
+    x_train = torch.load("dataset/formatted/x-train.pt").type(torch.float32)
+    x_test = torch.load("dataset/formatted/x-test.pt").type(torch.float32)
+    x_train_n_test = torch.cat((x_train, x_test))
+    mean, std = x_train_n_test.mean(), x_train_n_test.std()
+    x_train = (x_train - mean) / (std + 1e-8)
+    x_test = (x_train - mean) / (std + 1e-8)
+    x_train, y_train = remove_samples_without_labels(x_train, y_train)
+
+    return x_train, y_train, x_test
+
+def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Tensor, Tensor]:
+    has_labels_mask = y_train.amax((1, 2)) != y_train.amin((1, 2))
+    return x_train[has_labels_mask], y_train[has_labels_mask]
+
+def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
+    imsge_files = list(sorted(
+        imgs_parent_dir.glob("*.png"),
+        key=lambda filename: int(filename.name.rstrip(".png"))
+    ))
+    imgs = torch.empty(
+        len(imsge_files),
+        1,
+        256,
+        256,
+        dtype=torch.uint8,
+    )
+    for img_idx, image_file in enumerate(imsge_files):
+        imgs[img_idx, 0] = torchvision.io.decode_image(image_file)[0]
+    return imgs
+
+def format_imgs_into_pt_file(imgs_parent_dir: Path):
+    tensor = load_imgs_as_tensor(imgs_parent_dir)
+    target_file = Path(
+        *imgs_parent_dir.parts[:-2],
+        "formatted",
+        imgs_parent_dir.parts[-1] + ".pt"
+    )
+    torch.save(tensor, target_file)
+
+def format_dataset():
+    shutil.rmtree("dataset/formatted", ignore_errors=True)
+    os.makedirs("dataset/formatted", exist_ok=True)
+    format_imgs_into_pt_file(Path("dataset/raw/x-train"))
+    format_imgs_into_pt_file(Path("dataset/raw/x-test"))
+    y_train_np: pd.DataFrame = (
+        pd.read_csv('dataset/raw/y-train.csv', index_col=0)
+        .values
+        .astype("uint8")
+        .T
+        .reshape(-1, 256, 256)
+    )
+    torch.save(
+        torch.from_numpy(y_train_np),
+        "dataset/formatted/y-train.pt"
+    )
+
+def download_raw_dataset():
     shutil.rmtree("path/to/directory", ignore_errors=True)
     raw_pth = Path("dataset/raw")
     raw_pth.mkdir(parents=True, exist_ok=True)
@@ -17,11 +92,11 @@ def mk_raw_dataset():
         "https://challengedata.ens.fr/media/public/test-images.zip",
         "dataset/raw/x-test",
     )
-    get_and_write_to(
+    wget_to_file(
         "https://challengedata.ens.fr/media/public/annotated_labels.json",
         "dataset/raw/annotated_labels.json",
     )
-    get_and_write_to(
+    wget_to_file(
         "https://challengedata.ens.fr/media/public/label_Hnl61pT.csv",
         "dataset/raw/y-train.csv",
     )
@@ -56,10 +131,10 @@ def get_and_unzip(url: str, path: str | Path):
         # Remove the now-empty subfolder
         sub.rmdir()
 
-def get_and_write_to(url: str, path: str):
+def wget_to_file(url: str, path: str):
     answer = requests.get(url)
     with open(path, "wb") as f:
         f.write(answer.content)
 
 if __name__ == "__main__":
-    mk_raw_dataset()
+    main()

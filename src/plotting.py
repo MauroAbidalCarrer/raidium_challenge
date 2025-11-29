@@ -25,7 +25,6 @@ def plt_pred(
         y: Optional[Tensor] = None,
     ):
     sample = x[sample_idx:sample_idx + 1]
-    print(sample.shape)
     model_device = next(model.parameters()).device
     y_pred_logits = model(sample.to(model_device))
     y_pred = torch.argmax(y_pred_logits, dim=1)

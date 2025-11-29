@@ -6,7 +6,7 @@ from torch import nn, Tensor
 import matplotlib.pyplot as plt
 
 
-def plt_sample(slice_image, *seg_masks):
+def plt_sample(slice_image: Tensor, *seg_masks):
     fig, axes = plt.subplots(1, 1 + len(seg_masks))
     fig = fig.set_size_inches(15, 15)
     axes[0].imshow(slice_image, cmap="gray")
@@ -24,18 +24,19 @@ def plt_pred(
         x: Tensor,
         y: Optional[Tensor] = None,
     ):
-    image_test = x[sample_idx:sample_idx + 1]
+    sample = x[sample_idx:sample_idx + 1]
+    print(sample.shape)
     model_device = next(model.parameters()).device
-    label_test = model(image_test.to(model_device))
-    pred_test = torch.argmax(label_test, dim=1)
+    y_pred_logits = model(sample.to(model_device))
+    y_pred = torch.argmax(y_pred_logits, dim=1)
     if y is not None:
         plt_sample(
-            image_test.squeeze(),
-            pred_test.squeeze().cpu().numpy(),
-            y[sample_idx],
+            sample.squeeze().cpu().numpy(),
+            y_pred.squeeze().cpu().numpy(),
+            y[sample_idx].cpu().numpy(),
         )
     else:
         plt_sample(
-            image_test.squeeze(),
-            pred_test.squeeze().cpu().numpy(),
+            sample.squeeze().cpu().numpy(),
+            y_pred.squeeze().cpu().numpy(),
         )

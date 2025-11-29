@@ -3,31 +3,33 @@ from tqdm.notebook import tqdm
 from typing import Callable, Dict, Optional
 
 import torch
-import pandas as pd
+import wandb
 import numpy as np
+import pandas as pd
 from torch import nn, Tensor
 from torch.utils.data import DataLoader
 
 from src.plotting import plt_pred
 from src.metrics import dice_pandas
+from src.configs import TrainingConfig
 
 
 criterion_type = Callable[[Tensor, Tensor], Dict[str, Tensor]]
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+WANDB_LOG_COMMIT_INTERVAL = 10
 
 
 def train_unet(
         model: nn.Module,
-        device: torch.device,
+        train_cfg: TrainingConfig,
         train_loader: DataLoader,
         valid_loader: DataLoader,
-        n_epochs: int,
-        n_classes: int,
         criterion: criterion_type,
         save_checkpoint: bool=True,
         plt_preds: bool=False,
         x_test: Optional[Tensor]=None
     ):
-
+    wandb.init(project="raidium-challenge", config=vars(train_cfg))
     if plt_preds and x_test is None:
         print("plt_preds", plt_preds)
         print("x_test", x_test)
@@ -35,26 +37,24 @@ def train_unet(
 
     torch.backends.cuda.matmul.fp32_precision = 'ieee'
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=train_cfg.starting_lr)
     model = model.to(device)
-
-    for epoch in tqdm(range(n_epochs)):
-        train_loss = train_model_for_single_epoch(
+    step = 0
+    for epoch in tqdm(range(train_cfg.n_epochs)):
+        step = train_model_for_single_epoch(
             model,
             optimizer,
-            device,
             train_loader,
             criterion,
+            step,
         )
-        test_loss, score = evaluate_model(
+        evaluate_model(
             model,
-            device,
             valid_loader,
             criterion,
-            n_classes,
+            train_cfg.n_classes,
+            step
         )
-
-        print(f"Epoch : {epoch} \t Training Loss : {train_loss / len(train_loader):.3f} \t Test Loss : {test_loss / len(valid_loader):.3f} \t Score: {score:.3f}")
 
         if save_checkpoint:
             os.makedirs("checkpoints", exist_ok=True)
@@ -70,10 +70,10 @@ def train_unet(
 def train_model_for_single_epoch(
         model: nn.Module,
         optimizer: torch.optim.Optimizer,
-        device: torch.device,
         train_loader: DataLoader,
         criterion: criterion_type,
-    ) -> float:
+        step: int,
+    ):
     model.train()
     train_loss = 0
     for (image, y_true) in train_loader:
@@ -90,16 +90,22 @@ def train_model_for_single_epoch(
         optimizer.step()
 
         train_loss += loss.item()
-    return train_loss
+        wandb.log(
+            data={k: l.item() for k, l in losses.items()},
+            step=step,
+            commit=step % WANDB_LOG_COMMIT_INTERVAL == 0,
+        )
+        step += 1
+    return step
 
 @torch.no_grad
 def evaluate_model(
         model: nn.Module,
-        device: torch.device,
         valid_loader: DataLoader,
         criterion: criterion_type,    
         n_classes: int,
-    ) -> tuple[float, float]:
+        step: int,
+    ):
     model.eval()
     test_loss = 0
     predictions = []
@@ -120,6 +126,11 @@ def evaluate_model(
         predictions.append(pred.squeeze().cpu().numpy())
 
     predictions = pd.DataFrame(np.concat(predictions).reshape(-1 , 256 * 256))
-    valid = pd.DataFrame(np.concat(true_masks).reshape((-1, 256*256)))
-    score = dice_pandas(valid, predictions, n_classes)
-    return test_loss, score
+    valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
+    wandb.log(
+        data={
+            **{k: l.item for k, l in losses.items()},
+            "dice_score": dice_pandas(valid, predictions, n_classes),
+        },
+        step=step,
+    )

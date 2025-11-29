@@ -1,11 +1,15 @@
 import json
 import warnings
-from typing import Optional
 
 import torch
 import numpy as np
 import pandas as pd
 from torch import Tensor
+
+from src.configs import TrainingConfig
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def dice_pandas(y_true_df: pd.DataFrame, y_pred_df: pd.DataFrame, n_classes: int) -> float:
@@ -47,10 +51,10 @@ def dice_pandas(y_true_df: pd.DataFrame, y_pred_df: pd.DataFrame, n_classes: int
     return float(np.nanmean(cls_dices))
 
 class SegmentationLoss:
-    def __init__(self, cross_entropy_weights: Optional[Tensor]=None, ce_weight: float=0.5, dice_weight: float=0.5):
-        self.ce_weight = ce_weight
-        self.dice_weight = dice_weight
-        self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=cross_entropy_weights)
+    def __init__(self, train_cfg: TrainingConfig):
+        self.train_cfg = train_cfg
+        weight = get_class_weights().to(device) if train_cfg.use_labels_weight else None
+        self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=weight)
     
     def __call__(self, y_pred: Tensor, y_true: Tensor) -> dict[str, Tensor]:
         """
@@ -60,7 +64,8 @@ class SegmentationLoss:
         """
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
         d_loss = dice_loss(y_pred, y_true)
-        loss = d_loss * self.dice_weight + ce_loss * self.ce_weight
+        loss = d_loss * self.train_cfg.dice_loss_weight \
+            + ce_loss * self.train_cfg.cross_entropy_loss_weight
         return {
             "average_loss": loss,
             "cross_entropy_loss": ce_loss,

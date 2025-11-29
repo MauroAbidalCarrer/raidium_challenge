@@ -1,3 +1,4 @@
+wandb/*
 checkpoints/*
 submission.csv
 dataset/*

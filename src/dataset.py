@@ -6,12 +6,46 @@ from pathlib import Path
 import torch
 import requests
 import torchvision
+import numpy as np
 import pandas as pd
 from torch import Tensor
+from torch.utils.data import TensorDataset
+from torch.utils.data import DataLoader
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def main():
     download_raw_dataset()
     format_dataset()
+
+def get_data_loaders(
+        x_train: Tensor,
+        y_train: Tensor,
+        x_valid: Tensor,
+        y_valid: Tensor,
+        batch_size: int,
+    ) -> tuple[DataLoader, DataLoader]:
+    """
+    ## Description:
+    Instantiates train and validation Tensordataset on device with images as float32.
+    Returns corresponding data loaders with given batch size.
+    """
+    train_ds = TensorDataset(
+        x_train.to(device=device, dtype=torch.float32),
+        y_train.to(device=device, dtype=torch.long),
+    )
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+
+    valid_ds = TensorDataset(
+        x_valid.to(device=device, dtype=torch.float32),
+        y_valid.to(device=device, dtype=torch.long),
+    )
+    valid_batch_size = int(np.clip(batch_size * 2, a_min=1, a_max=64))
+    valid_loader = DataLoader(valid_ds, batch_size=valid_batch_size, shuffle=False)
+
+    return train_loader, valid_loader
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """

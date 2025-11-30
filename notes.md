@@ -8,6 +8,7 @@ Find close scans:
     - find close labels and set them to the same class
 
 todo:
+- fix submission
 - fix training:
     - understand why/fix the fact that higher batch sizes breaks training
 - use optuna

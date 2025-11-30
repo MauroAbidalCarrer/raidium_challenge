@@ -1,9 +1,16 @@
+explore
 Check felzenszwalb
-potential easy win with blurry masks
-Use augmentations to avoid overfittings
-understand why batch_size > 1 breaks training
-use optuna
-use TTA
-use lr scheduler?
+
+ideas:
 Find close scans:
     - Use unions of labels of close scans
+    - find close labels and set them to the same class
+
+todo:
+- use simpler model for faster iteration
+- fix training:
+    - understand why/fix the fact that higher batch sizes breaks training
+- use optuna
+- Use augmentations to avoid overfittings
+- use lr scheduler?
+- use TTA

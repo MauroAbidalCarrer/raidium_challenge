@@ -9,6 +9,7 @@ from torch import Tensor
 import torch.nn.functional as F
 
 from src.configs import TrainingConfig
+from scipy.optimize import linear_sum_assignment
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,6 +77,7 @@ class SegmentationLoss:
             "dice_loss": base_d_loss,
             "permuatation_invariant_dice_loss": invariant_d_loss,
         }
+
 
 def base_dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     pred = torch.softmax(pred, dim=1)

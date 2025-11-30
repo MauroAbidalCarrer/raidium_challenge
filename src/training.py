@@ -46,13 +46,14 @@ def train_unet(
             optimizer,
             train_loader,
             criterion,
+            train_cfg,
             step,
         )
         evaluate_model(
             model,
             valid_loader,
             criterion,
-            train_cfg.n_classes,
+            train_cfg,
             step
         )
 
@@ -67,15 +68,20 @@ def train_unet(
             plt_pred(model, 0, x_valid, y_valid)
             plt_pred(model, 20, x_test)
 
+    wandb.finish()
+
 def train_model_for_single_epoch(
         model: nn.Module,
         optimizer: torch.optim.Optimizer,
         train_loader: DataLoader,
         criterion: criterion_type,
+        train_cfg: TrainingConfig,
         step: int,
     ):
     model.train()
     train_loss = 0
+    predictions = []
+    true_masks = []
     for (image, y_true) in train_loader:
         image = image.to(device=device)
         y_true = y_true.to(device=device)
@@ -91,11 +97,20 @@ def train_model_for_single_epoch(
 
         train_loss += loss.item()
         wandb.log(
-            data={k: l.item() for k, l in losses.items()},
+            data={"training/" + k: l.item() for k, l in losses.items()},
             step=step,
             commit=step % WANDB_LOG_COMMIT_INTERVAL == 0,
         )
         step += 1
+        pred = torch.argmax(y_pred_logits, dim=1)
+        true_masks.append(y_true.cpu().numpy().squeeze())
+        predictions.append(pred.squeeze().cpu().numpy())
+    predictions = pd.DataFrame(np.concat(predictions).reshape(-1 , 256 * 256))
+    valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
+    wandb.log(
+        data={"training/dice_score": dice_pandas(valid, predictions, train_cfg.n_classes)},
+        step=step,
+    )
     return step
 
 @torch.no_grad
@@ -103,7 +118,7 @@ def evaluate_model(
         model: nn.Module,
         valid_loader: DataLoader,
         criterion: criterion_type,    
-        n_classes: int,
+        train_cfg: TrainingConfig,
         step: int,
     ):
     model.eval()
@@ -129,8 +144,8 @@ def evaluate_model(
     valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
     wandb.log(
         data={
-            **{k: l.item for k, l in losses.items()},
-            "dice_score": dice_pandas(valid, predictions, n_classes),
+            **{"validation/" + k: l.item() for k, l in losses.items()},
+            "validation/dice_score": dice_pandas(valid, predictions, train_cfg.n_classes),
         },
         step=step,
     )

@@ -1,6 +1,6 @@
 import os
 from time import time
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from typing import Callable, Dict, Optional
 
 import torch
@@ -175,3 +175,4 @@ def evaluate_model(
         },
         step=step,
     )
+

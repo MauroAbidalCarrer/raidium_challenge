@@ -26,26 +26,8 @@ from src.configs import TrainingConfig, ModelConfig
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-train_cfg = TrainingConfig(
-    batch_size=1,
-    n_classes=55,
-    n_epochs=100,
-    cross_entropy_loss_weight=00.5,
-    invariant_d_loss_weight=1,
-    dice_loss_weight=0,
-    use_labels_weight=True,
-    starting_lr=1e-4,
-)
-model_cfg = ModelConfig(
-    channels=(64, 128, 256),      # encoder channels + bottleneck
-    strides=(2, 2),               # two encoder stages → two strides
-    kernel_size=3,
-    num_res_units=2,              # two residual blocks per stage
-    act=("leakyrelu", {"negative_slope": 0.01}),
-    norm="instance",
-    dropout=0.0,
-    bias=True,
-)
+train_cfg = TrainingConfig()
+model_cfg = ModelConfig()
 def mk_model(train_cfg: TrainingConfig, model_cfg: ModelConfig) -> nn.Module:
     model = (
         UNet(

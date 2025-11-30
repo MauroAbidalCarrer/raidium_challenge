@@ -11,6 +11,7 @@ todo:
 - fix submission
 - fix training:
     - understand why/fix the fact that higher batch sizes breaks training
+- Add images to wandb logs.
 - use optuna
 - Use augmentations to avoid overfittings
 - use lr scheduler?

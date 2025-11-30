@@ -1,6 +1,7 @@
 wandb/*
 checkpoints/*
 submission.csv
+submission.zip
 dataset/*
 .vscode
 

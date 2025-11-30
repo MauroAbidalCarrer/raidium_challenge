@@ -5,3 +5,5 @@ understand why batch_size > 1 breaks training
 use optuna
 use TTA
 use lr scheduler?
+Find close scans:
+    - Use unions of labels of close scans

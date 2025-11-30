@@ -1,4 +1,5 @@
 import os
+from time import time
 from tqdm.notebook import tqdm
 from typing import Callable, Dict, Optional
 
@@ -29,7 +30,7 @@ def train_unet(
         plt_preds: bool=False,
         x_test: Optional[Tensor]=None
     ):
-    wandb.init(project="raidium-challenge", config=vars(train_cfg))
+    wandb_init(train_cfg, model)
     if plt_preds and x_test is None:
         print("plt_preds", plt_preds)
         print("x_test", x_test)
@@ -40,21 +41,24 @@ def train_unet(
     optimizer = torch.optim.Adam(model.parameters(), lr=train_cfg.starting_lr)
     model = model.to(device)
     step = 0
+    training_samples_seen = 0
     for epoch in tqdm(range(train_cfg.n_epochs)):
-        step = train_model_for_single_epoch(
+        step, training_samples_seen = train_model_for_single_epoch(
             model,
             optimizer,
             train_loader,
             criterion,
             train_cfg,
             step,
+            training_samples_seen,
         )
         evaluate_model(
             model,
             valid_loader,
             criterion,
             train_cfg,
-            step
+            step,
+            training_samples_seen,
         )
 
         if save_checkpoint:
@@ -70,6 +74,15 @@ def train_unet(
 
     wandb.finish()
 
+def wandb_init(train_cfg: TrainingConfig, model: nn.Module):
+    wandb.init(
+        project="raidium-challenge",
+        config={
+            **vars(train_cfg),
+            **(vars(model.cfg) if hasattr(model, "cfg") else {}),
+        },
+    )
+
 def train_model_for_single_epoch(
         model: nn.Module,
         optimizer: torch.optim.Optimizer,
@@ -77,7 +90,8 @@ def train_model_for_single_epoch(
         criterion: criterion_type,
         train_cfg: TrainingConfig,
         step: int,
-    ):
+        training_samples_seen: int,
+    ) -> tuple[int, int]:
     model.train()
     train_loss = 0
     predictions = []
@@ -85,6 +99,7 @@ def train_model_for_single_epoch(
     for (image, y_true) in train_loader:
         image = image.to(device=device)
         y_true = y_true.to(device=device)
+        model_step_start_time = time()
         optimizer.zero_grad()
         with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
             y_pred_logits = model(image)
@@ -94,32 +109,42 @@ def train_model_for_single_epoch(
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
-
+        time_to_perform_model_step = time() - model_step_start_time
         train_loss += loss.item()
         wandb.log(
-            data={"training/" + k: l.item() for k, l in losses.items()},
+            data=
+            {
+                **{"training/" + k: l.item() for k, l in losses.items()},
+                "performance/time_to_perform_model_step": time_to_perform_model_step,
+                "training/samples_seen": training_samples_seen,
+            },
             step=step,
             commit=step % WANDB_LOG_COMMIT_INTERVAL == 0,
         )
         step += 1
+        training_samples_seen += len(image)
         pred = torch.argmax(y_pred_logits, dim=1)
         true_masks.append(y_true.cpu().numpy().squeeze())
         predictions.append(pred.squeeze().cpu().numpy())
     predictions = pd.DataFrame(np.concat(predictions).reshape(-1 , 256 * 256))
     valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
     wandb.log(
-        data={"training/dice_score": dice_pandas(valid, predictions, train_cfg.n_classes)},
+        data={
+            "training/dice_score": dice_pandas(valid, predictions, train_cfg.n_classes),
+            "training/samples_seen": training_samples_seen,
+        },
         step=step,
     )
-    return step
+    return step, training_samples_seen
 
 @torch.no_grad
 def evaluate_model(
         model: nn.Module,
         valid_loader: DataLoader,
-        criterion: criterion_type,    
+        criterion: criterion_type,
         train_cfg: TrainingConfig,
         step: int,
+        training_samples_seen: int,
     ):
     model.eval()
     test_loss = 0
@@ -146,6 +171,7 @@ def evaluate_model(
         data={
             **{"validation/" + k: l.item() for k, l in losses.items()},
             "validation/dice_score": dice_pandas(valid, predictions, train_cfg.n_classes),
+            "training/samples_seen": training_samples_seen,
         },
         step=step,
     )

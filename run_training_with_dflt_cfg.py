@@ -29,9 +29,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 train_cfg = TrainingConfig(
     batch_size=1,
     n_classes=55,
-    n_epochs=20,
-    cross_entropy_loss_weight=0,
-    dice_loss_weight=1,
+    n_epochs=100,
+    cross_entropy_loss_weight=00.5,
+    invariant_d_loss_weight=1,
+    dice_loss_weight=0,
     use_labels_weight=True,
     starting_lr=1e-4,
 )
@@ -84,6 +85,3 @@ train_unet(
     plt_preds=False,
     x_test=x_test,
 )
-del train_loader
-del valid_loader
-del model

@@ -12,7 +12,7 @@ def plt_sample(slice_image: Tensor, *seg_masks):
     axes[0].imshow(slice_image, cmap="gray")
     for seg_i, seg_mask in enumerate(seg_masks):
         axes[seg_i + 1].imshow(slice_image, cmap="gray")
-        seg_masked = np.ma.masked_where(seg_mask.reshape((256,256)) == 0, (seg_mask.reshape((256,256))))
+        seg_masked = np.ma.masked_where(seg_mask == 0, seg_mask)
         axes[seg_i + 1].imshow(seg_masked, cmap="tab20")
     plt.axis("off")
     plt.show()

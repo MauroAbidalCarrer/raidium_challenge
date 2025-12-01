@@ -11,7 +11,18 @@ import pandas as pd
 from torch import Tensor
 from torch.utils.data import TensorDataset
 from torch.utils.data import DataLoader
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
+
+train_transform = A.Compose([
+    A.RandomRotate90(),
+    A.Rotate(limit=30, p=0.5),
+    A.RandomResizedCrop(size=(256, 256), scale=(0.7, 1.0), ratio=(1.0, 1.0), p=0.5),
+    # A.RandomCrop(height=224, width=224),   # or A.CropNonEmptyMaskIfExists
+    A.GaussNoise(var_limit=(10.0, 50.0), p=0.5),
+    A.RandomBrightnessContrast(p=0.5),
+], additional_targets={"mask": "mask"})
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -26,26 +37,52 @@ def get_data_loaders(
         x_valid: Tensor,
         y_valid: Tensor,
         batch_size: int,
-    ) -> tuple[DataLoader, DataLoader]:
-    """
-    ## Description:
-    Instantiates train and validation Tensordataset on device with images as float32.
-    Returns corresponding data loaders with given batch size.
-    """
-    train_ds = TensorDataset(
-        x_train.to(device=device, dtype=torch.float32),
-        y_train.to(device=device, dtype=torch.long),
+    ):
+    train_ds = SegmentationDataset(
+        images=x_train,
+        masks=y_train,
+        transform=train_transform,
     )
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
 
-    valid_ds = TensorDataset(
-        x_valid.to(device=device, dtype=torch.float32),
-        y_valid.to(device=device, dtype=torch.long),
+    valid_ds = SegmentationDataset(
+        images=x_valid,
+        masks=y_valid,
+        transform=None,   # no augmentation for validation
     )
-    valid_batch_size = int(np.clip(batch_size * 2, a_min=1, a_max=64))
+
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+    valid_batch_size = int(np.clip(batch_size * 2, 1, 64))
     valid_loader = DataLoader(valid_ds, batch_size=valid_batch_size, shuffle=False)
 
     return train_loader, valid_loader
+
+class SegmentationDataset(torch.utils.data.Dataset):
+    def __init__(self, images: Tensor, masks: Tensor, transform=None):
+        self.images = images
+        self.masks = masks
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        img = self.images[idx].cpu().numpy()  # Albumentations expects numpy HWC
+        mask = self.masks[idx].cpu().numpy()
+
+        # If tensor is CHW convert to HWC
+        if img.ndim == 3:
+            img = img.transpose(1, 2, 0)
+
+        if self.transform:
+            augmented = self.transform(image=img, mask=mask)
+            img = augmented["image"]
+            mask = augmented["mask"]
+
+        # back to torch
+        img = torch.tensor(img).permute(2, 0, 1).float()
+        mask = torch.tensor(mask).long()
+        return img, mask
+
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """

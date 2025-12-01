@@ -1,12 +1,15 @@
 import json
 import warnings
+from typing import Optional, Tuple
 
 import torch
 import numpy as np
 import pandas as pd
 from torch import Tensor
+import torch.nn.functional as F
 
-from src.configs import TrainingConfig
+from src.configs import TrainingConfig, N_CLASSES
+from scipy.optimize import linear_sum_assignment
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -63,16 +66,39 @@ class SegmentationLoss:
         Dictionnary of loss_average, ce_loss and dice_loss
         """
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
-        d_loss = dice_loss(y_pred, y_true)
-        loss = d_loss * self.train_cfg.dice_loss_weight \
+        base_d_loss = base_dice_loss(y_pred, y_true)
+        loss = base_d_loss * self.train_cfg.dice_loss_weight \
             + ce_loss * self.train_cfg.cross_entropy_loss_weight
-        return {
+        return loss, {
             "average_loss": loss,
             "cross_entropy_loss": ce_loss,
-            "dice_loss": d_loss,
+            "dice_loss": base_d_loss,
         }
 
-def dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
+class MyAwesomeLoss:
+    def __init__(self, train_cfg: TrainingConfig, class_weights: Optional[Tensor]=None):
+        self.train_cfg = train_cfg
+        self.class_weights = class_weights
+    
+    def __call__(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
+        # y_true_one_hot = one_hot_y_true(y_true)
+        ce = torch.nn.functional.cross_entropy(
+            y_pred,
+            y_true.type(torch.long),
+            # ignore_index=0,
+            weight=self.class_weights,
+        )
+        return ce, {"my_awesome_loss": ce}
+        
+def my_awesome_loss(y_pred: Tensor, y_true: Tensor) -> Tensor:
+    ce = torch.nn.functional.cross_entropy(
+        y_pred,
+        y_true.type(torch.long),
+        # ignore_index=0,
+    )
+    return ce, {"my_awesome_loss": ce}
+
+def base_dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     pred = torch.softmax(pred, dim=1)
     target_one_hot = (
         torch.nn.functional.one_hot(

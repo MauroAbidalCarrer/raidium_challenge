@@ -1,25 +1,30 @@
 from typing import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+
+N_CLASSES = 55
 
 @dataclass
 class TrainingConfig:
-    batch_size: int
-    n_classes: int
-    n_epochs: int
-    starting_lr: float
-    cross_entropy_loss_weight: float
-    dice_loss_weight: float
-    use_labels_weight: bool
+    batch_size: int = 1
+    n_epochs: int = 30
+    starting_lr: float = 1e-4
+    cross_entropy_loss_weight: float = 0.5
+    dice_loss_weight: float = 1
+    invariant_d_loss_weight: float = 1
+    use_labels_weight: bool = True
+    test_size: float = 0.2
+    random_state: int = 0
 
 @dataclass
 class ModelConfig:
-    channels: Sequence[int]       # encoder channels + bottleneck
-    strides: Sequence[int]               # two encoder stages → two strides
-    kernel_size: int
-    num_res_units: int              # two residual blocks per stage
-    act:tuple[str, dict]
-    norm: str
-    dropout: float
-    bias: bool
-
+    channels: Sequence[int] = field(default_factory=lambda: (64, 128, 256))
+    strides: Sequence[int] = field(default_factory=lambda: (2, 2))
+    kernel_size: int = 3
+    num_res_units: int = 2
+    act: tuple[str, dict] = field(
+        default_factory=lambda: ("leakyrelu", {"negative_slope": 0.01})
+    )
+    norm: str = "instance"
+    dropout: float = 0.0
+    bias: bool = True

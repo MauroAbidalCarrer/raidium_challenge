@@ -1,7 +1,12 @@
 import os
 from time import time
-from tqdm.notebook import tqdm
-from typing import Callable, Dict, Optional
+from tqdm import tqdm
+from typing import (
+    Callable,
+    Dict,
+    Optional,
+    Tuple,
+)
 
 import torch
 import wandb
@@ -12,10 +17,10 @@ from torch.utils.data import DataLoader
 
 from src.plotting import plt_pred
 from src.metrics import dice_pandas
-from src.configs import TrainingConfig
+from src.configs import TrainingConfig, N_CLASSES
 
 
-criterion_type = Callable[[Tensor, Tensor], Dict[str, Tensor]]
+criterion_type = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 WANDB_LOG_COMMIT_INTERVAL = 10
 
@@ -103,8 +108,7 @@ def train_model_for_single_epoch(
         optimizer.zero_grad()
         with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
             y_pred_logits = model(image)
-            losses = criterion(y_pred_logits, y_true)
-            loss = losses["average_loss"]
+            loss, losses = criterion(y_pred_logits, y_true)
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -130,7 +134,7 @@ def train_model_for_single_epoch(
     valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
     wandb.log(
         data={
-            "training/dice_score": dice_pandas(valid, predictions, train_cfg.n_classes),
+            "training/dice_score": dice_pandas(valid, predictions, N_CLASSES),
             "training/samples_seen": training_samples_seen,
         },
         step=step,
@@ -158,8 +162,7 @@ def evaluate_model(
 
         y_pred_logits = model(image)
 
-        losses = criterion(y_pred_logits, y_true)
-        loss = losses["average_loss"]
+        loss, losses = criterion(y_pred_logits, y_true)
         test_loss += loss.item()
 
         pred = torch.argmax(y_pred_logits, dim=1)
@@ -170,8 +173,9 @@ def evaluate_model(
     wandb.log(
         data={
             **{"validation/" + k: l.item() for k, l in losses.items()},
-            "validation/dice_score": dice_pandas(valid, predictions, train_cfg.n_classes),
+            "validation/dice_score": dice_pandas(valid, predictions, N_CLASSES),
             "training/samples_seen": training_samples_seen,
         },
         step=step,
     )
+

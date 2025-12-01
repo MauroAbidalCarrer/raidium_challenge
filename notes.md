@@ -15,6 +15,7 @@ todo:
 - fix submission
 - Add images to wandb logs.
 - use optuna
+- stratify train test split
 - Use augmentations to avoid overfittings
 - use lr scheduler?
 - use TTA

@@ -2,7 +2,7 @@ from sklearn.model_selection import train_test_split
 
 from src.models import mk_model
 from src.training import train_unet
-from src.metrics import my_awesome_loss
+from src.metrics import SegmentationLoss
 from src.dataset import get_data_loaders
 from src.dataset import load_preprocessed_dataset
 from src.configs import TrainingConfig, ModelConfig
@@ -20,7 +20,7 @@ def main():
         random_state=train_cfg.random_state,
     )
     x_test = x_test.cpu()
-
+    criterion = SegmentationLoss(train_cfg)
     model = mk_model(train_cfg, model_cfg)
     train_loader, valid_loader = get_data_loaders(
         x_train,
@@ -34,7 +34,7 @@ def main():
         train_cfg,
         train_loader,
         valid_loader,
-        my_awesome_loss,
+        criterion,
         save_checkpoint=True,
         plt_preds=False,
         x_test=x_test,

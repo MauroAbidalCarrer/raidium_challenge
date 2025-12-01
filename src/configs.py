@@ -2,14 +2,15 @@ from typing import Sequence
 from dataclasses import dataclass, field
 
 
+N_CLASSES = 55
+
 @dataclass
 class TrainingConfig:
-    batch_size: int = 64
-    n_classes: int = 55
-    n_epochs: int = 100
+    batch_size: int = 1
+    n_epochs: int = 30
     starting_lr: float = 1e-4
-    cross_entropy_loss_weight: float = 0.05
-    dice_loss_weight: float = 0
+    cross_entropy_loss_weight: float = 0.5
+    dice_loss_weight: float = 1
     invariant_d_loss_weight: float = 1
     use_labels_weight: bool = True
     test_size: float = 0.2

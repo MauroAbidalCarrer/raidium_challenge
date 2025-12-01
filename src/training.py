@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 
 from src.plotting import plt_pred
 from src.metrics import dice_pandas
-from src.configs import TrainingConfig
+from src.configs import TrainingConfig, N_CLASSES
 
 
 criterion_type = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
@@ -134,7 +134,7 @@ def train_model_for_single_epoch(
     valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
     wandb.log(
         data={
-            "training/dice_score": dice_pandas(valid, predictions, train_cfg.n_classes),
+            "training/dice_score": dice_pandas(valid, predictions, N_CLASSES),
             "training/samples_seen": training_samples_seen,
         },
         step=step,
@@ -173,7 +173,7 @@ def evaluate_model(
     wandb.log(
         data={
             **{"validation/" + k: l.item() for k, l in losses.items()},
-            "validation/dice_score": dice_pandas(valid, predictions, train_cfg.n_classes),
+            "validation/dice_score": dice_pandas(valid, predictions, N_CLASSES),
             "training/samples_seen": training_samples_seen,
         },
         step=step,

@@ -7,10 +7,10 @@ N_CLASSES = 55
 @dataclass
 class TrainingConfig:
     batch_size: int = 1
-    n_epochs: int = 30
-    starting_lr: float = 1e-4
-    cross_entropy_loss_weight: float = 0.5
-    dice_loss_weight: float = 1
+    n_epochs: int = 600
+    starting_lr: float = 5e-4
+    cross_entropy_loss_weight: float = 1
+    dice_loss_weight: float = 2
     invariant_d_loss_weight: float = 1
     use_labels_weight: bool = True
     test_size: float = 0.2

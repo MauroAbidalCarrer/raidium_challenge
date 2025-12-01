@@ -15,14 +15,17 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
 
-train_transform = A.Compose([
-    A.RandomRotate90(),
-    A.Rotate(limit=30, p=0.5),
-    A.RandomResizedCrop(size=(256, 256), scale=(0.7, 1.0), ratio=(1.0, 1.0), p=0.5),
-    # A.RandomCrop(height=224, width=224),   # or A.CropNonEmptyMaskIfExists
-    A.GaussNoise(var_limit=(10.0, 50.0), p=0.5),
-    A.RandomBrightnessContrast(p=0.5),
-], additional_targets={"mask": "mask"})
+train_transform = A.Compose(
+    [
+        A.RandomRotate90(),
+        A.Rotate(limit=30, p=1),
+        A.RandomResizedCrop(size=(256, 256), scale=(0.7, 1.0), ratio=(1.0, 1.0), p=0.5),
+        # A.RandomCrop(height=224, width=224),   # or A.CropNonEmptyMaskIfExists
+        # A.GaussNoise(noise_scale_factor=0.5, p=0.75),
+        # A.RandomBrightnessContrast(p=0.5),
+    ],
+    additional_targets={"mask": "mask"},
+)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

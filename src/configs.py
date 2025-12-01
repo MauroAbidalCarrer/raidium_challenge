@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class TrainingConfig:
-    batch_size: int = 32
+    batch_size: int = 64
     n_classes: int = 55
     n_epochs: int = 100
     starting_lr: float = 1e-4

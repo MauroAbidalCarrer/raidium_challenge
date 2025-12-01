@@ -2,8 +2,8 @@ from sklearn.model_selection import train_test_split
 
 from src.models import mk_model
 from src.training import train_unet
+from src.metrics import my_awesome_loss
 from src.dataset import get_data_loaders
-from src.metrics import SegmentationLoss
 from src.dataset import load_preprocessed_dataset
 from src.configs import TrainingConfig, ModelConfig
 
@@ -28,14 +28,13 @@ def main():
         x_valid,
         y_valid,
         batch_size=train_cfg.batch_size,
-    )
-    cirterion = SegmentationLoss(train_cfg)
+    )    
     train_unet(
         model,
         train_cfg,
         train_loader,
         valid_loader,
-        cirterion,
+        my_awesome_loss,
         save_checkpoint=True,
         plt_preds=False,
         x_test=x_test,

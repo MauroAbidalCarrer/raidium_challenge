@@ -78,6 +78,14 @@ class SegmentationLoss:
             "permuatation_invariant_dice_loss": invariant_d_loss,
         }
 
+def my_awesome_loss(y_pred: Tensor, y_true: Tensor) -> Tensor:
+    # y_true_one_hot = one_hot_y_true(y_true)
+    ce = torch.nn.functional.cross_entropy(
+        y_pred,
+        y_true.type(torch.long),
+        ignore_index=0,
+    )
+    return ce, {"my_awesome_loss": ce}
 
 def base_dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     pred = torch.softmax(pred, dim=1)

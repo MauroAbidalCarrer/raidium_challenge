@@ -1,7 +1,12 @@
 import os
 from time import time
 from tqdm import tqdm
-from typing import Callable, Dict, Optional
+from typing import (
+    Callable,
+    Dict,
+    Optional,
+    Tuple,
+)
 
 import torch
 import wandb
@@ -15,7 +20,7 @@ from src.metrics import dice_pandas
 from src.configs import TrainingConfig
 
 
-criterion_type = Callable[[Tensor, Tensor], Dict[str, Tensor]]
+criterion_type = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 WANDB_LOG_COMMIT_INTERVAL = 10
 
@@ -103,8 +108,7 @@ def train_model_for_single_epoch(
         optimizer.zero_grad()
         with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
             y_pred_logits = model(image)
-            losses = criterion(y_pred_logits, y_true)
-            loss = losses["average_loss"]
+            loss, losses = criterion(y_pred_logits, y_true)
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -158,8 +162,7 @@ def evaluate_model(
 
         y_pred_logits = model(image)
 
-        losses = criterion(y_pred_logits, y_true)
-        loss = losses["average_loss"]
+        loss, losses = criterion(y_pred_logits, y_true)
         test_loss += loss.item()
 
         pred = torch.argmax(y_pred_logits, dim=1)

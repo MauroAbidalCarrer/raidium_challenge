@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 
 from src.plotting import plt_pred
 from src.metrics import dice_pandas
-from src.configs import TrainingConfig, N_CLASSES
+from src.configs import TrainingConfig, DatasetConfig, N_CLASSES
 
 
 criterion_type = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
@@ -27,6 +27,7 @@ WANDB_LOG_COMMIT_INTERVAL = 10
 
 def train_unet(
         model: nn.Module,
+        dataset_cfg: DatasetConfig,
         train_cfg: TrainingConfig,
         train_loader: DataLoader,
         valid_loader: DataLoader,
@@ -35,7 +36,7 @@ def train_unet(
         plt_preds: bool=False,
         x_test: Optional[Tensor]=None
     ):
-    wandb_init(train_cfg, model)
+    wandb_init(train_cfg, dataset_cfg, model)
     if plt_preds and x_test is None:
         print("plt_preds", plt_preds)
         print("x_test", x_test)
@@ -79,11 +80,12 @@ def train_unet(
 
     wandb.finish()
 
-def wandb_init(train_cfg: TrainingConfig, model: nn.Module):
+def wandb_init(train_cfg: TrainingConfig, dataset_cfg: DatasetConfig, model: nn.Module):
     wandb.init(
         project="raidium-challenge",
         config={
             **vars(train_cfg),
+            **(vars(dataset_cfg)),
             **(vars(model.cfg) if hasattr(model, "cfg") else {}),
         },
     )

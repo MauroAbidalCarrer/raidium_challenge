@@ -5,18 +5,19 @@ from src.training import train_unet
 from src.metrics import SegmentationLoss
 from src.dataset import get_data_loaders
 from src.dataset import load_preprocessed_dataset
-from src.configs import TrainingConfig, ModelConfig
+from src.configs import TrainingConfig, ModelConfig, DatasetConfig
 
 
 def main():
     train_cfg = TrainingConfig()
     model_cfg = ModelConfig()
+    dataset_cfg = DatasetConfig()
 
     x_train, y_train, x_test = load_preprocessed_dataset()
     x_train, x_valid, y_train, y_valid = train_test_split(
         x_train,
         y_train,
-        test_size=train_cfg.test_size,
+        test_size=dataset_cfg.test_size,
         random_state=train_cfg.random_state,
     )
     x_test = x_test.cpu()
@@ -27,10 +28,12 @@ def main():
         y_train,
         x_valid,
         y_valid,
-        batch_size=train_cfg.batch_size,
+        train_cfg,
+        dataset_cfg,
     )    
     train_unet(
         model,
+        dataset_cfg,
         train_cfg,
         train_loader,
         valid_loader,

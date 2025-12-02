@@ -13,14 +13,8 @@ import albumentations as A
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
 
+from src.configs import TrainingConfig, DatasetConfig
 
-train_transform = A.Compose(
-    [
-        A.Affine((0.5, 2), 0.2, fill=0),
-        A.CoarseDropout(num_holes_range=[1, 5], fill=0, p=0.75),
-    ],
-    additional_targets={"mask": "mask"},
-)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -34,12 +28,13 @@ def get_data_loaders(
         y_train: Tensor,
         x_valid: Tensor,
         y_valid: Tensor,
-        batch_size: int,
+        train_cfg: TrainingConfig,
+        dataset_cfg: DatasetConfig,
     ):
     train_ds = SegmentationDataset(
         images=x_train,
         masks=y_train,
-        transform=train_transform,
+        transform=dataset_cfg.transform,
     )
 
     valid_ds = SegmentationDataset(
@@ -48,8 +43,8 @@ def get_data_loaders(
         transform=None,   # no augmentation for validation
     )
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    valid_batch_size = int(np.clip(batch_size * 2, 1, 64))
+    train_loader = DataLoader(train_ds, batch_size=train_cfg.batch_size, shuffle=True)
+    valid_batch_size = int(np.clip(train_cfg.batch_size * 2, 1, 64))
     valid_loader = DataLoader(valid_ds, batch_size=valid_batch_size, shuffle=False)
 
     return train_loader, valid_loader

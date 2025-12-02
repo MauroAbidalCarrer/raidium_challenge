@@ -1,8 +1,21 @@
 from typing import Sequence
 from dataclasses import dataclass, field
 
+import albumentations as A
+
 
 N_CLASSES = 55
+
+@dataclass
+class DatasetConfig:
+    test_size: float = 0.2
+    transform: A.DualTransform = A.Compose(
+        [
+            A.Affine((0.5, 2), 0.2, fill=0),
+            A.CoarseDropout(num_holes_range=[1, 5], fill=0, p=0.75),
+        ],
+        additional_targets={"mask": "mask"},
+    )
 
 @dataclass
 class TrainingConfig:

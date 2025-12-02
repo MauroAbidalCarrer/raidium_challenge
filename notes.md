@@ -9,11 +9,10 @@ Find close scans:
 
 todo:
 - get to ~44 dice with just nnUNet:
-    - data augmentation
-        - log data augmentation hp to wandb
+    - increase model size (make sure receptive field reaches the entire picture)
     - use optuna
     - Speed up stuff
-        - Use bfloat16 for images?
+        - Leave x as uint8 and cast BATCH it to float 32 + apply normalization afterwards?
         - asynchronize train/evaluate
 - understand why/fix the fact that higher batch sizes breaks training
     - Could it be because we are using instance norm? maybe switch to batch norm?
@@ -25,5 +24,7 @@ todo:
 - make the repo veeeeeeeery clean, so I can flex it to everyone
     - create a second repo and delete this one?
 
-<!-- - fix submission -->
 <!-- - Use pixel wise class imbalance and weighting -->
+<!-- - fix submission -->
+<!-- - data augmentation
+    - log data augmentation hp to wandb -->

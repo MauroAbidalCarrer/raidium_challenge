@@ -7,16 +7,19 @@ Find close scans:
 - use sigmoid activation for classes and set background only if all classes probs are less than 0.5.
 
 todo:
-- fix training:
-    - understand why/fix the fact that higher batch sizes breaks training
+- get to ~44 dice with just nnUNet:
     - data augmentation
-    - adversarial training
-- fix submission
-- Add images to wandb logs.
-- use optuna
+    - use optuna
+    - Speed up stuff
+        - asynchronize train/evaluate
+- understand why/fix the fact that higher batch sizes breaks training
 - stratify train test split
-- Use augmentations to avoid overfittings
 - use lr scheduler?
 - use TTA
+- Use ensemble?
 
+- make the repo veeeeeeeery clean, so I can flex it to everyone
+    - create a second repo and delete this one?
+
+<!-- - fix submission -->
 <!-- - Use pixel wise class imbalance and weighting -->

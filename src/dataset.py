@@ -103,7 +103,7 @@ def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     x_train_n_test = torch.cat((x_train, x_test))
     mean, std = x_train_n_test.mean(), x_train_n_test.std()
     x_train = (x_train - mean) / (std + 1e-8)
-    x_test = (x_train - mean) / (std + 1e-8)
+    x_test = (x_test - mean) / (std + 1e-8)
     x_train, y_train = remove_samples_without_labels(x_train, y_train)
 
     return x_train, y_train, x_test

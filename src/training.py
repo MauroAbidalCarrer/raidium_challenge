@@ -70,7 +70,7 @@ def train_unet(
                 training_samples_seen,
             )
 
-        with time_to_run("save checkpoint"):
+        with time_to_run("other/save checkpoint"):
             if save_checkpoint:
                 os.makedirs("checkpoints", exist_ok=True)
                 torch.save(model.state_dict(), f'checkpoints/checkpoint_epoch{epoch}.pth')
@@ -106,32 +106,32 @@ def train_model_for_single_epoch(
         training_samples_seen: int,
     ) -> tuple[int, int]:
     model.train()
-    train_loss = 0
+    total_loss = 0
     predictions = []
     true_masks = []
     n_batches = len(train_loader)
     train_loader = iter(train_loader)
     for batch_idx in range(n_batches):
-        with time_to_run("get training batch"):
+        with time_to_run("train/get batch"):
             image, y_true = next(train_loader)
-        with time_to_run("move to device"):
+        with time_to_run("train/move to device"):
             image = image.to(device=device)
             y_true = y_true.to(device=device)
 
         model_step_start_time = time()
-        with time_to_run("training forward pass"):
+        with time_to_run("train/forward pass"):
             optimizer.zero_grad()
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
                 y_pred_logits = model(image)
                 loss, losses = criterion(y_pred_logits, y_true)
-        with time_to_run("backward pass"):
+        with time_to_run("train/backward pass"):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
         time_to_perform_model_step = time() - model_step_start_time
-        with time_to_run("add loss item to train loss"):
-            train_loss += loss.item()
-        with time_to_run("wandb log training step"):
+        with time_to_run("train/add loss item to train total_loss"):
+            total_loss += loss.item()
+        with time_to_run("train/wandb log"):
             wandb.log(
                 data=
                 {
@@ -144,15 +144,15 @@ def train_model_for_single_epoch(
             )
         step += 1
         training_samples_seen += len(image)
-        with time_to_run("move preds/masks to cpu"):
+        with time_to_run("train/move preds & masks to cpu"):
             pred = torch.argmax(y_pred_logits, dim=1)
             true_masks.append(y_true.cpu().numpy().squeeze())
             predictions.append(pred.squeeze().cpu().numpy())
-    with time_to_run("compute pandas dice score"):
+    with time_to_run("train/pandas dice score"):
         predictions = pd.DataFrame(np.concat(predictions).reshape(-1 , 256 * 256))
         valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
         dice_score = dice_pandas(valid, predictions, N_CLASSES)
-    with time_to_run("wandb log dice score+samples seen"):
+    with time_to_run("train/wandb log dice score & samples seen"):
         wandb.log(
             data={
                 "training/dice_score": dice_score,
@@ -178,30 +178,31 @@ def evaluate_model(
     n_batches = len(valid_loader)
     valid_loader = iter(valid_loader)
     for batch_idx in range(n_batches):
-        with time_to_run("get valid bacth"):
+        with time_to_run("eval/get bacth"):
             image, y_true = next(valid_loader)
-        image = image.to(device=device)
-        y_true = y_true.to(device=device)
-
-        y_pred_logits = model(image)
-
-        loss, losses = criterion(y_pred_logits, y_true)
-        test_loss += loss.item()
-
-        with time_to_run("move preds to CPU valid"):
+        with time_to_run("eval/move to device"):
+            image = image.to(device=device)
+            y_true = y_true.to(device=device)
+        with time_to_run("eval/forward pass"):
+            y_pred_logits = model(image)
+            loss, losses = criterion(y_pred_logits, y_true)
+        with time_to_run("eval/add loss item to train total_loss"):
+            test_loss += loss.item()
+        with time_to_run("eval/move preds to CPU valid"):
             pred = torch.argmax(y_pred_logits, dim=1)
             true_masks.append(y_true.cpu().numpy().squeeze())
             predictions.append(pred.squeeze().cpu().numpy())
-
-    with time_to_run("time to compute pandas dice score evaluate"):
+    with time_to_run("eval/pandas dice score"):
         predictions = pd.DataFrame(np.concat(predictions).reshape(-1 , 256 * 256))
-    valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
-    wandb.log(
-        data={
-            **{"validation/" + k: l.item() for k, l in losses.items()},
-            "validation/dice_score": dice_pandas(valid, predictions, N_CLASSES),
-            "training/samples_seen": training_samples_seen,
-        },
-        step=step,
-    )
+        valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
+        dice_score = dice_pandas(valid, predictions, N_CLASSES)
+    with time_to_run("eval/wandb log"):
+        wandb.log(
+            data={
+                **{"validation/" + k: l.item() for k, l in losses.items()},
+                "validation/dice_score": dice_score,
+                "training/samples_seen": training_samples_seen,
+            },
+            step=step,
+        )
 

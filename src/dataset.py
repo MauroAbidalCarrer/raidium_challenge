@@ -98,30 +98,12 @@ def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Ten
     has_labels_mask = y_train.amax((1, 2)) != y_train.amin((1, 2))
     return x_train[has_labels_mask], y_train[has_labels_mask]
 
-def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
-    imsge_files = list(sorted(
-        imgs_parent_dir.glob("*.png"),
-        key=lambda filename: int(filename.name.rstrip(".png"))
-    ))
-    imgs = torch.empty(
-        len(imsge_files),
-        1,
-        256,
-        256,
-        dtype=torch.uint8,
-    )
-    for img_idx, image_file in enumerate(imsge_files):
-        imgs[img_idx, 0] = torchvision.io.decode_image(image_file)[0]
-    return imgs
-
-def format_imgs_into_pt_file(imgs_parent_dir: Path):
-    tensor = load_imgs_as_tensor(imgs_parent_dir)
-    target_file = Path(
-        *imgs_parent_dir.parts[:-2],
-        "formatted",
-        imgs_parent_dir.parts[-1] + ".pt"
-    )
-    torch.save(tensor, target_file)
+def mk_dataset():
+    if not os.path.isdir("dataset"):
+        print("No directoty 'dataset' found, creating dataset...", end="")
+        download_raw_dataset()
+        format_dataset()
+        print("done")        
 
 def format_dataset():
     shutil.rmtree("dataset/formatted", ignore_errors=True)
@@ -139,6 +121,32 @@ def format_dataset():
         torch.from_numpy(y_train_np),
         "dataset/formatted/y-train.pt"
     )
+
+def format_imgs_into_pt_file(imgs_parent_dir: Path):
+    tensor = load_imgs_as_tensor(imgs_parent_dir)
+    target_file = Path(
+        *imgs_parent_dir.parts[:-2],
+        "formatted",
+        imgs_parent_dir.parts[-1] + ".pt"
+    )
+    torch.save(tensor, target_file)
+
+def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
+    imsge_files = list(sorted(
+        imgs_parent_dir.glob("*.png"),
+        key=lambda filename: int(filename.name.rstrip(".png"))
+    ))
+    imgs = torch.empty(
+        len(imsge_files),
+        1,
+        256,
+        256,
+        dtype=torch.uint8,
+    )
+    for img_idx, image_file in enumerate(imsge_files):
+        imgs[img_idx, 0] = torchvision.io.decode_image(image_file)[0]
+    return imgs
+
 
 def download_raw_dataset():
     shutil.rmtree("path/to/directory", ignore_errors=True)

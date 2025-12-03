@@ -66,7 +66,7 @@ class SegmentationLoss:
         Dictionnary of loss_average, ce_loss and dice_loss
         """
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
-        base_d_loss = base_dice_loss(y_pred, y_true)
+        base_d_loss = torch_dice_score(y_pred, y_true)
         loss = base_d_loss * self.train_cfg.dice_loss_weight \
             + ce_loss * self.train_cfg.cross_entropy_loss_weight
         return loss, {
@@ -98,7 +98,7 @@ def my_awesome_loss(y_pred: Tensor, y_true: Tensor) -> Tensor:
     )
     return ce, {"my_awesome_loss": ce}
 
-def base_dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
+def torch_dice_score(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     pred = torch.softmax(pred, dim=1)
     target_one_hot = (
         torch.nn.functional.one_hot(
@@ -111,6 +111,20 @@ def base_dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     union = pred.sum(dim=(2, 3)) + target_one_hot.sum(dim=(2, 3))
     dice = (2. * intersection + smooth) / (union + smooth)
     return 1 - dice.mean()
+
+def torch_dice_score(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
+    pred = torch.softmax(pred, dim=1)
+    target_one_hot = (
+        torch.nn.functional.one_hot(
+            target,
+            num_classes=pred.shape[1],
+        )
+        .permute(0, 3, 1, 2)
+    )
+    intersection = (pred * target_one_hot).sum(dim=(2, 3))
+    union = pred.sum(dim=(2, 3)) + target_one_hot.sum(dim=(2, 3))
+    dice = (2. * intersection + smooth) / (union + smooth)
+    return dice.mean()
 
 def get_class_weights() -> torch.Tensor:
     file_name = "./dataset/raw/annotated_labels.json"

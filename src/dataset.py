@@ -19,10 +19,6 @@ from src.configs import TrainingConfig, DatasetConfig
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def main():
-    download_raw_dataset()
-    format_dataset()
-
 def get_data_loaders(
         x_train: Tensor,
         y_train: Tensor,
@@ -199,6 +195,3 @@ def wget_to_file(url: str, path: str):
     answer = requests.get(url)
     with open(path, "wb") as f:
         f.write(answer.content)
-
-if __name__ == "__main__":
-    main()

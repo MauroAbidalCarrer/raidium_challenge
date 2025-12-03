@@ -1,14 +1,21 @@
+import os
+
 from sklearn.model_selection import train_test_split
 
 from src.models import mk_model
 from src.training import train_unet
 from src.metrics import SegmentationLoss
-from src.dataset import get_data_loaders
+from src import dataset
 from src.dataset import load_preprocessed_dataset
 from src.configs import TrainingConfig, ModelConfig, DatasetConfig
 
 
 def main():
+    if not os.path.isdir("dataset"):
+        print("No directoty 'dataset' found, creating dataset...", end="")
+        dataset.download_raw_dataset()
+        dataset.format_dataset()
+        print("done")
     train_cfg = TrainingConfig()
     model_cfg = ModelConfig()
     dataset_cfg = DatasetConfig()
@@ -23,7 +30,7 @@ def main():
     x_test = x_test.cpu()
     criterion = SegmentationLoss(train_cfg)
     model = mk_model(train_cfg, model_cfg)
-    train_loader, valid_loader = get_data_loaders(
+    train_loader, valid_loader = dataset.get_data_loaders(
         x_train,
         y_train,
         x_valid,

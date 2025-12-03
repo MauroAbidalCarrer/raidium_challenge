@@ -50,7 +50,7 @@ def train_unet(
     step = 0
     training_samples_seen = 0
     for epoch in tqdm(range(train_cfg.n_epochs)):
-        with time_to_run("train"):
+        with time_to_run("train/total"):
             step, training_samples_seen = train_model_for_single_epoch(
                 model,
                 optimizer,
@@ -60,7 +60,7 @@ def train_unet(
                 step,
                 training_samples_seen,
             )
-        with time_to_run("evaluate"):
+        with time_to_run("eval/total"):
             evaluate_model(
                 model,
                 valid_loader,
@@ -112,15 +112,15 @@ def train_model_for_single_epoch(
     n_batches = len(train_loader)
     train_loader = iter(train_loader)
     for batch_idx in range(n_batches):
-        with time_to_run("get batch"):
+        with time_to_run("get training batch"):
             image, y_true = next(train_loader)
         with time_to_run("move to device"):
             image = image.to(device=device)
             y_true = y_true.to(device=device)
 
         model_step_start_time = time()
-        optimizer.zero_grad()
         with time_to_run("training forward pass"):
+            optimizer.zero_grad()
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
                 y_pred_logits = model(image)
                 loss, losses = criterion(y_pred_logits, y_true)
@@ -129,7 +129,8 @@ def train_model_for_single_epoch(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
         time_to_perform_model_step = time() - model_step_start_time
-        train_loss += loss.item()
+        with time_to_run("add loss item to train loss"):
+            train_loss += loss.item()
         with time_to_run("wandb log training step"):
             wandb.log(
                 data=
@@ -177,7 +178,7 @@ def evaluate_model(
     n_batches = len(valid_loader)
     valid_loader = iter(valid_loader)
     for batch_idx in range(n_batches):
-        with time_to_run("time to get valid bacthes"):
+        with time_to_run("get valid bacth"):
             image, y_true = next(valid_loader)
         image = image.to(device=device)
         y_true = y_true.to(device=device)
@@ -192,7 +193,8 @@ def evaluate_model(
             true_masks.append(y_true.cpu().numpy().squeeze())
             predictions.append(pred.squeeze().cpu().numpy())
 
-    predictions = pd.DataFrame(np.concat(predictions).reshape(-1 , 256 * 256))
+    with time_to_run("time to compute pandas dice score evaluate"):
+        predictions = pd.DataFrame(np.concat(predictions).reshape(-1 , 256 * 256))
     valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
     wandb.log(
         data={

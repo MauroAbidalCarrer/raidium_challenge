@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Optional host argument (default: vast)
+HOST="${1:-vast}"
+
+echo "Using host: $HOST"
+
 # Check for wandb API key
 if [ ! -f "$HOME/.wandb_api_key" ]; then
     echo "~/.wandb_api_key does not exist."
@@ -11,13 +16,12 @@ fi
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 echo "Local branch detected: $CURRENT_BRANCH"
 
-
 # Copy W&B key to remote
 scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    "$HOME/.wandb_api_key" vast_1:~/
+    "$HOME/.wandb_api_key" "$HOST":~/
 
-# SSH into vast_1 instance
-ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null vast_1 <<EOF
+# SSH into host instance
+ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$HOST" <<EOF
 set -e
 
 mkdir -p repos
@@ -33,7 +37,7 @@ git remote rename origin github
 
 uv sync
 
-wandb login \$(cat ~/.wandb_api_key)
+uv run wandb login \$(cat ~/.wandb_api_key)
 rm -f ~/.wandb_api_key
 
 uv run src/dataset

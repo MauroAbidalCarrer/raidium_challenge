@@ -40,5 +40,5 @@ uv sync
 uv run wandb login \$(cat ~/.wandb_api_key)
 rm -f ~/.wandb_api_key
 
-uv run src/dataset
+uv run python -c "from src import dataset; dataset.mk_dataset()"
 EOF

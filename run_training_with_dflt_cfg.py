@@ -1,5 +1,3 @@
-import os
-
 from sklearn.model_selection import train_test_split
 
 from src.models import mk_model
@@ -11,11 +9,7 @@ from src.configs import TrainingConfig, ModelConfig, DatasetConfig
 
 
 def main():
-    if not os.path.isdir("dataset"):
-        print("No directoty 'dataset' found, creating dataset...", end="")
-        dataset.download_raw_dataset()
-        dataset.format_dataset()
-        print("done")
+    dataset.mk_dataset(verbose=False)
     train_cfg = TrainingConfig()
     model_cfg = ModelConfig()
     dataset_cfg = DatasetConfig()

@@ -98,12 +98,16 @@ def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Ten
     has_labels_mask = y_train.amax((1, 2)) != y_train.amin((1, 2))
     return x_train[has_labels_mask], y_train[has_labels_mask]
 
-def mk_dataset():
+def mk_dataset(verbose: bool=True):
     if not os.path.isdir("dataset"):
-        print("No directoty 'dataset' found, creating dataset...", end="")
+        if verbose:
+            print("No directoty 'dataset' found, creating dataset...", end="")
         download_raw_dataset()
         format_dataset()
-        print("done")        
+        if verbose:
+            print("done")        
+    elif verbose:
+        print("'dataset' directory already present not doing anythin, if you want to recreate it please delete the directory.")
 
 def format_dataset():
     shutil.rmtree("dataset/formatted", ignore_errors=True)

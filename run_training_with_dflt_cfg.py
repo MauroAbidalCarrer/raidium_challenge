@@ -9,7 +9,7 @@ from src.configs import TrainingConfig, ModelConfig, DatasetConfig
 
 
 def main():
-    dataset.mk_dataset()
+    dataset.mk_dataset(verbose=False)
     train_cfg = TrainingConfig()
     model_cfg = ModelConfig()
     dataset_cfg = DatasetConfig()

@@ -21,7 +21,7 @@ from src.configs import TrainingConfig, DatasetConfig, N_CLASSES, DEVICE
 
 
 criterion_type = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
-WANDB_LOG_COMMIT_INTERVAL = 10
+WANDB_LOG_COMMIT_INTERVAL = 100
 
 
 def train_unet(

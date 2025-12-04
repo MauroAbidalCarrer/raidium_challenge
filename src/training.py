@@ -91,7 +91,7 @@ def train_model_for_single_epoch(
         step: int,
         training_samples_seen: int,
     ) -> tuple[int, int]:
-    monai_dice_metric = DiceMetric(num_classes=N_CLASSES)
+    # monai_dice_metric = DiceMetric(num_classes=N_CLASSES)
     model.train()
     total_loss = 0
     predictions = []
@@ -134,17 +134,17 @@ def train_model_for_single_epoch(
             y_pred_argmax = torch.argmax(y_pred_logits, dim=1)
             true_masks.append(y_true.cpu().numpy().squeeze())
             predictions.append(y_pred_argmax.squeeze().cpu().numpy())
-        with time_to_run("train/monai dice score"):
-            with torch.no_grad():
-                one_hot_y_pred = torch.nn.functional.one_hot(y_pred_argmax.long(), num_classes=N_CLASSES).permute(0, 3, 1, 2)
-                one_hot_y_true = torch.nn.functional.one_hot(y_true.long(), num_classes=N_CLASSES).permute(0, 3, 1, 2)
-                monai_dice_metric(one_hot_y_pred, one_hot_y_true)
-    with time_to_run("train/monai dice score agg"):
-        monai_dice_score_agg = monai_dice_metric.aggregate()
-    with time_to_run("train/monai dice score item"):
-        monai_dice_score = monai_dice_score_agg.item()
-    with time_to_run("train/monai dice score reset"):
-        monai_dice_metric.reset()
+        # with time_to_run("train/monai dice score"):
+        #     with torch.no_grad():
+        #         one_hot_y_pred = torch.nn.functional.one_hot(y_pred_argmax.long(), num_classes=N_CLASSES).permute(0, 3, 1, 2)
+        #         one_hot_y_true = torch.nn.functional.one_hot(y_true.long(), num_classes=N_CLASSES).permute(0, 3, 1, 2)
+        #         monai_dice_metric(one_hot_y_pred, one_hot_y_true)
+    # with time_to_run("train/monai dice score agg"):
+    #     monai_dice_score_agg = monai_dice_metric.aggregate()
+    # with time_to_run("train/monai dice score item"):
+    #     monai_dice_score = monai_dice_score_agg.item()
+    # with time_to_run("train/monai dice score reset"):
+    #     monai_dice_metric.reset()
     with time_to_run("train/torch_dice_score"):
         dice_score_torch = torch_dice_score(y_pred_logits, y_true)
     with time_to_run("train/dice_score_torch item"):
@@ -158,7 +158,7 @@ def train_model_for_single_epoch(
             data={
                 "training/dice_score": dice_score,
                 "training/samples_seen": training_samples_seen,
-                "training/monoai_dice_score": monai_dice_score,
+                # "training/monoai_dice_score": monai_dice_score,
                 "training/torch_dice_score": dice_score_torch,
             },
             step=step,
@@ -174,7 +174,7 @@ def evaluate_model(
         step: int,
         training_samples_seen: int,
     ):
-    monai_dice_metric = DiceMetric(num_classes=N_CLASSES)
+    # monai_dice_metric = DiceMetric(num_classes=N_CLASSES)
     model.eval()
     test_loss = 0
     predictions = []
@@ -196,17 +196,17 @@ def evaluate_model(
             pred = torch.argmax(y_pred_logits, dim=1)
             true_masks.append(y_true.cpu().numpy().squeeze())
             predictions.append(pred.squeeze().cpu().numpy())
-        with time_to_run("eval/move preds & masks to cpu"):
-            y_pred_argmax = torch.argmax(y_pred_logits, dim=1)
-            true_masks.append(y_true.cpu().numpy().squeeze())
-        with time_to_run("eval/monai dice score"):
-            one_hot_y_pred = torch.nn.functional.one_hot(y_pred_argmax.long(), num_classes=N_CLASSES).permute(0, 3, 1, 2)
-            one_hot_y_true = torch.nn.functional.one_hot(y_true.long(), num_classes=N_CLASSES).permute(0, 3, 1, 2)
-            monai_dice_metric(one_hot_y_pred, one_hot_y_true)
-    with time_to_run("eval/monai dice score agg"):
-        monai_dice_score_agg = monai_dice_metric.aggregate()
-    with time_to_run("eval/monai dice score item"):
-        monai_dice_score = monai_dice_score_agg.item()
+        with time_to_run("eval/torch_dice_score"):
+            dice_score_torch = torch_dice_score(y_pred_logits, y_true)
+    #     with time_to_run("eval/monai dice score"):
+    #         y_pred_argmax = torch.argmax(y_pred_logits, dim=1)
+    #         one_hot_y_pred = torch.nn.functional.one_hot(y_pred_argmax.long(), num_classes=N_CLASSES).permute(0, 3, 1, 2)
+    #         one_hot_y_true = torch.nn.functional.one_hot(y_true.long(), num_classes=N_CLASSES).permute(0, 3, 1, 2)
+    #         monai_dice_metric(one_hot_y_pred, one_hot_y_true)
+    # with time_to_run("eval/monai dice score agg"):
+    #     monai_dice_score_agg = monai_dice_metric.aggregate()
+    # with time_to_run("eval/monai dice score item"):
+    #     monai_dice_score = monai_dice_score_agg.item()
     with time_to_run("eval/pandas dice score"):
         predictions = pd.DataFrame(np.concat(predictions).reshape(-1 , 256 * 256))
         valid = pd.DataFrame(np.concat(true_masks).reshape(-1, 256 * 256))
@@ -216,9 +216,8 @@ def evaluate_model(
             data={
                 **{"validation/" + k: l.item() for k, l in losses.items()},
                 "validation/dice_score": dice_score,
-                "validation/monoai_dice_score": monai_dice_score,
+                # "validation/monoai_dice_score": monai_dice_score,
                 "training/samples_seen": training_samples_seen,
             },
             step=step,
         )
-

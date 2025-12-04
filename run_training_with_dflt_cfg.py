@@ -40,8 +40,6 @@ def main():
         valid_loader,
         criterion,
         save_checkpoint=True,
-        plt_preds=False,
-        x_test=x_test,
     )
 
 if __name__ == "__main__":

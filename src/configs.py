@@ -1,10 +1,12 @@
 from typing import Sequence
 from dataclasses import dataclass, field
 
+import torch
 import albumentations as A
 
 
 N_CLASSES = 55
+DEVICE = torch.device("cuda" if torch.cuda.is_availabe() else "cpu")
 
 @dataclass
 class DatasetConfig:

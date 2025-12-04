@@ -11,6 +11,7 @@ todo:
     - understand why loss.item call is taking so much time and fix it
     - Leave x as uint8 and cast BATCH it to float 32 + apply normalization afterwards?
         - check this isn't what's breaking the training
+    - use torch compile?
     - asynchronize train/evaluate and as many other things as possible
 - save checkpoint as artifact on wandb asynchronously 13h30
 - Get to top 1 with unet and (run training while eating)?

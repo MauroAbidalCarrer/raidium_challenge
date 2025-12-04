@@ -161,7 +161,7 @@ def evaluate_model(
     with time_to_run("eval/pandas dice score"):
         predictions = np.concat(predictions).reshape(-1 , 256 * 256)
         valid = np.concat(true_masks).reshape(-1, 256 * 256)
-        dice_score = dice_pandas(valid, predictions, N_CLASSES)
+        dice_score = dice_pandas(valid, predictions)
     with time_to_run("eval/wandb log"):
         wandb.log(
             data={

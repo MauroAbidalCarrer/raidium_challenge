@@ -6,7 +6,7 @@ import albumentations as A
 
 
 N_CLASSES = 55
-DEVICE = torch.device("cuda" if torch.cuda.is_availabe() else "cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @dataclass
 class DatasetConfig:

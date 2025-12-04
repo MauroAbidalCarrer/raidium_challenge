@@ -4,15 +4,15 @@ Documentation
 ideas:
 - find some way of loss normalization?
     - Use float/int8 convolution ? that would be dope
-    - asynchronize train/evaluate and as many other things as possible
 
 todo:
 - Speed up stuff
+    - make dice score run on pytorch (use monai?)
+    - understand why loss.item call is taking so much time and fix it
     - Leave x as uint8 and cast BATCH it to float 32 + apply normalization afterwards?
         - check this isn't what's breaking the training
-    - make dice score run on pytorch (use monai?)
-    - Make the 
-- checkpoint on wandb
+    - asynchronize train/evaluate and as many other things as possible
+- save checkpoint as artifact on wandb asynchronously
 - Get to top 1 with unet?
     - Even bigger model 
     - Even more data aug?

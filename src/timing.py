@@ -1,6 +1,8 @@
 from time import time
 from contextlib import contextmanager
 
+import torch
+
 
 time_dict: dict[str, float] = {}
 
@@ -11,6 +13,7 @@ def time_to_run(context_name: str):
     try:
         yield
     finally:
+        torch.cuda.synchronize()
         end = time()
         elapsed_time = end - start
         time_dict[context_name] = time_dict.get(context_name, 0) + elapsed_time

@@ -4,7 +4,6 @@ from tqdm import tqdm
 from typing import (
     Callable,
     Dict,
-    Optional,
     Tuple,
 )
 
@@ -16,13 +15,12 @@ from torch import nn, Tensor
 from monai.metrics import DiceMetric
 from torch.utils.data import DataLoader
 
-from src.metrics import dice_pandas, torch_dice_score, my_torch_dice_score
-from src.timing import time_to_run, print_time_dict, time_dict
-from src.configs import TrainingConfig, DatasetConfig, N_CLASSES
+from src.metrics import dice_pandas
+from src.timing import time_to_run, print_time_dict
+from src.configs import TrainingConfig, DatasetConfig, N_CLASSES, DEVICE
 
 
 criterion_type = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 WANDB_LOG_COMMIT_INTERVAL = 10
 
 
@@ -39,7 +37,7 @@ def train_unet(
     torch.backends.cuda.matmul.fp32_precision = 'ieee'
 
     optimizer = torch.optim.Adam(model.parameters(), lr=train_cfg.starting_lr)
-    model = model.to(device)
+    model = model.to(DEVICE)
     step = 0
     training_samples_seen = 0
     for epoch in tqdm(range(train_cfg.n_epochs)):
@@ -98,12 +96,12 @@ def train_model_for_single_epoch(
         with time_to_run("train/get batch"):
             image, y_true = next(train_loader)
         with time_to_run("train/move to device"):
-            image = image.to(device=device)
-            y_true = y_true.to(device=device)
+            image = image.to(device=DEVICE)
+            y_true = y_true.to(device=DEVICE)
         model_step_start_time = time()
         with time_to_run("train/forward pass"):
             optimizer.zero_grad()
-            with torch.autocast(device_type=device.type, dtype=torch.bfloat16):
+            with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
                 y_pred_logits = model(image)
                 loss, losses = criterion(y_pred_logits, y_true)
         with time_to_run("train/backward pass"):
@@ -151,8 +149,8 @@ def evaluate_model(
         with time_to_run("eval/get bacth"):
             image, y_true = next(valid_loader)
         with time_to_run("eval/move to device"):
-            image = image.to(device=device)
-            y_true = y_true.to(device=device)
+            image = image.to(device=DEVICE)
+            y_true = y_true.to(device=DEVICE)
         with time_to_run("eval/forward pass"):
             y_pred_logits = model(image)
             loss, losses = criterion(y_pred_logits, y_true)

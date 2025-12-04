@@ -75,29 +75,6 @@ class SegmentationLoss:
             "dice_loss": base_d_loss,
         }
 
-class MyAwesomeLoss:
-    def __init__(self, train_cfg: TrainingConfig, class_weights: Optional[Tensor]=None):
-        self.train_cfg = train_cfg
-        self.class_weights = class_weights
-    
-    def __call__(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
-        # y_true_one_hot = one_hot_y_true(y_true)
-        ce = torch.nn.functional.cross_entropy(
-            y_pred,
-            y_true.type(torch.long),
-            # ignore_index=0,
-            weight=self.class_weights,
-        )
-        return ce, {"my_awesome_loss": ce}
-        
-def my_awesome_loss(y_pred: Tensor, y_true: Tensor) -> Tensor:
-    ce = torch.nn.functional.cross_entropy(
-        y_pred,
-        y_true.type(torch.long),
-        # ignore_index=0,
-    )
-    return ce, {"my_awesome_loss": ce}
-
 def torch_dice_score(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     pred = torch.softmax(pred, dim=1)
     target_one_hot = (

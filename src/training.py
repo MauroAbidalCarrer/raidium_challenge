@@ -16,7 +16,6 @@ from torch import nn, Tensor
 from monai.metrics import DiceMetric
 from torch.utils.data import DataLoader
 
-from src.plotting import plt_pred
 from src.metrics import dice_pandas, torch_dice_score
 from src.timing import time_to_run, print_time_dict, time_dict
 from src.configs import TrainingConfig, DatasetConfig, N_CLASSES
@@ -35,15 +34,8 @@ def train_unet(
         valid_loader: DataLoader,
         criterion: criterion_type,
         save_checkpoint: bool=True,
-        plt_preds: bool=False,
-        x_test: Optional[Tensor]=None
     ):
     wandb_init(train_cfg, dataset_cfg, model)
-    if plt_preds and x_test is None:
-        print("plt_preds", plt_preds)
-        print("x_test", x_test)
-        raise ValueError("Did not provide a value for x_test when setting plt_preds to true.")
-
     torch.backends.cuda.matmul.fp32_precision = 'ieee'
 
     optimizer = torch.optim.Adam(model.parameters(), lr=train_cfg.starting_lr)
@@ -77,13 +69,6 @@ def train_unet(
                 torch.save(model.state_dict(), f'checkpoints/checkpoint_epoch{epoch}.pth')
         
         print_time_dict()
-
-        if plt_preds:
-            x_train, y_train = next(iter(train_loader))
-            plt_pred(model, 0, x_train, y_train)
-            x_valid, y_valid = next(iter(valid_loader))
-            plt_pred(model, 0, x_valid, y_valid)
-            plt_pred(model, 20, x_test)
 
     wandb.finish()
 

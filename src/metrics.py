@@ -1,6 +1,5 @@
 import json
 import warnings
-from typing import Optional, Tuple
 
 import torch
 import numpy as np
@@ -11,16 +10,11 @@ import torch.nn.functional as F
 from src.configs import (
     TrainingConfig,
     N_CLASSES,
-    EPSILON,
     DEVICE,
 )
-from scipy.optimize import linear_sum_assignment
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray, n_classes: int) -> float:
+def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray) -> float:
     """
     Fully vectorized computation of the average Dice over samples and classes (skip background=0).
     This removes the Python loop over samples by using boolean broadcasting.
@@ -34,7 +28,7 @@ def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray, n_classes: int) ->
         raise ValueError("y_true and y_pred must have the same shape after transpose.")
 
     S, P = y_true.shape
-    classes = np.arange(1, n_classes + 1)  # skip background 0, shape (K,)
+    classes = np.arange(1, N_CLASSES + 1)  # skip background 0, shape (K,)
 
     # boolean one-hot along classes: shape (S, P, K)
     gt_mask = (y_true[..., None] == classes)     # True where pixel belongs to class c in GT
@@ -61,7 +55,7 @@ def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray, n_classes: int) ->
 class SegmentationLoss:
     def __init__(self, train_cfg: TrainingConfig):
         self.train_cfg = train_cfg
-        weight = get_class_weights().to(device) if train_cfg.use_labels_weight else None
+        weight = get_class_weights().to(DEVICE) if train_cfg.use_labels_weight else None
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=weight)
     
     def __call__(self, y_pred: Tensor, y_true: Tensor) -> dict[str, Tensor]:

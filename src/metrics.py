@@ -8,7 +8,12 @@ import pandas as pd
 from torch import Tensor
 import torch.nn.functional as F
 
-from src.configs import TrainingConfig, N_CLASSES
+from src.configs import (
+    TrainingConfig,
+    N_CLASSES,
+    EPSILON,
+    DEVICE,
+)
 from scipy.optimize import linear_sum_assignment
 
 
@@ -66,7 +71,7 @@ class SegmentationLoss:
         Dictionnary of loss_average, ce_loss and dice_loss
         """
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
-        base_d_loss = torch_dice_score(y_pred, y_true)
+        base_d_loss = torch_dice_loss(y_pred, y_true)
         loss = base_d_loss * self.train_cfg.dice_loss_weight \
             + ce_loss * self.train_cfg.cross_entropy_loss_weight
         return loss, {
@@ -75,7 +80,7 @@ class SegmentationLoss:
             "dice_loss": base_d_loss,
         }
 
-def torch_dice_score(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
+def torch_dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     pred = torch.softmax(pred, dim=1)
     target_one_hot = (
         torch.nn.functional.one_hot(
@@ -89,19 +94,79 @@ def torch_dice_score(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor
     dice = (2. * intersection + smooth) / (union + smooth)
     return 1 - dice.mean()
 
-def torch_dice_score(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
-    pred = torch.softmax(pred, dim=1)
-    target_one_hot = (
+def one_hot_and_permute(x: Tensor) -> Tensor:
+    return (
         torch.nn.functional.one_hot(
-            target,
-            num_classes=pred.shape[1],
+            x,
+            num_classes=N_CLASSES,
         )
         .permute(0, 3, 1, 2)
     )
-    intersection = (pred * target_one_hot).sum(dim=(2, 3))
-    union = pred.sum(dim=(2, 3)) + target_one_hot.sum(dim=(2, 3))
-    dice = (2. * intersection + smooth) / (union + smooth)
-    return dice.mean()
+
+# @torch.no_grad # To make sure it's not used with a loss
+# def torch_dice_score(y_pred: Tensor, y_true: Tensor) -> Tensor:
+#     y_pred_one_hot = one_hot_and_permute(y_pred.argmax(dim=1))
+#     y_true_one_hot = one_hot_and_permute(y_true)
+#     intersection = (y_pred_one_hot * y_true_one_hot).sum(dim=(2, 3))
+#     union = y_pred_one_hot.sum(dim=(2, 3)) + y_true_one_hot.sum(dim=(2, 3))
+#     # Use nan as some preds and/or masks channels could be all zeros
+#     dice_scores = 2. * intersection / union
+#     channel_wise_dice = torch.nanmean(dice_scores, dim=0)
+#     dice_score = torch.nanmean(channel_wise_dice, dim=0)
+#     return dice_score
+
+@torch.no_grad
+def torch_dice_score(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
+    """
+    y_pred: (B, C, H, W)  predicted probabilities or logits
+    y_true: (B, H, W)     integer labels in [0, C-1]
+    
+    Computes:
+      - Dice per sample per class (skip background=0)
+      - ignore empty GT classes (nan)
+      - average over samples (nanmean), then over classes (nanmean)
+      - returns scalar tensor
+    """
+    B, C, H, W = y_pred.shape
+    device = y_pred.device
+
+    # Convert pred to discrete labels using argmax over channels
+    # Equivalent to the pandas version which expects integer maps
+    y_pred_labels = torch.argmax(y_pred, dim=1)    # (B, H, W)
+
+    # Classes 1..C-1
+    classes = torch.arange(1, C, device=device)    # (K,)
+    K = classes.numel()
+
+    # Build boolean masks: (B, H, W, K)
+    # same as numpy broadcasting: (S, P, K)
+    gt_mask = (y_true.unsqueeze(-1) == classes)           # bool(B,H,W,K)
+    pred_mask = (y_pred_labels.unsqueeze(-1) == classes)  # bool(B,H,W,K)
+
+    # Flatten spatial dims
+    gt_mask = gt_mask.view(B, -1, K)       # (B, P, K)
+    pred_mask = pred_mask.view(B, -1, K)   # (B, P, K)
+
+    # Intersection and sums
+    intersection = (gt_mask & pred_mask).sum(dim=1).float()  # (B, K)
+    sum_pred = pred_mask.sum(dim=1).float()                  # (B, K)
+    sum_gt   = gt_mask.sum(dim=1).float()                    # (B, K)
+
+    denom = sum_pred + sum_gt                                # (B, K)
+
+    # Dice per batch per class
+    dice_spc = torch.where(denom == 0,
+                           torch.nan,
+                           2.0 * intersection / denom)       # (B, K)
+
+    # nanmean over batch then over classes
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        cls_mean = torch.nanmean(dice_spc, dim=0)            # (K,)
+        final_mean = torch.nanmean(cls_mean)                 # scalar
+
+    return final_mean
+
 
 def get_class_weights() -> torch.Tensor:
     file_name = "./dataset/raw/annotated_labels.json"

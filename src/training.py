@@ -110,16 +110,17 @@ def train_model_for_single_epoch(
             optimizer.step()
         time_to_perform_model_step = time() - model_step_start_time
         with time_to_run("train/wandb log"):
-            wandb.log(
-                data=
-                {
-                    **{"training/" + k: l.item() for k, l in losses.items()},
-                    "performance/time_to_perform_model_step": time_to_perform_model_step,
-                    "training/samples_seen": training_samples_seen,
-                },
-                step=step,
-                commit=step % WANDB_LOG_COMMIT_INTERVAL == 0,
-            )
+            if step % WANDB_LOG_COMMIT_INTERVAL == 0:
+                wandb.log(
+                    data=
+                    {
+                        **{"training/" + k: l.item() for k, l in losses.items()},
+                        "performance/time_to_perform_model_step": time_to_perform_model_step,
+                        "training/samples_seen": training_samples_seen,
+                    },
+                    step=step,
+                    commit=step % WANDB_LOG_COMMIT_INTERVAL == 0,
+                )
         step += 1
         training_samples_seen += len(image)
     with time_to_run("train/wandb log dice score & samples seen"):

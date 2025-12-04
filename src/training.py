@@ -67,7 +67,7 @@ def train_unet(
             if save_checkpoint:
                 os.makedirs("checkpoints", exist_ok=True)
                 torch.save(model.state_dict(), f'checkpoints/checkpoint_epoch{epoch}.pth')
-        
+
         print_time_dict()
 
     wandb.finish()
@@ -92,7 +92,6 @@ def train_model_for_single_epoch(
         training_samples_seen: int,
     ) -> tuple[int, int]:
     model.train()
-    total_loss = 0
     n_batches = len(train_loader)
     train_loader = iter(train_loader)
     for batch_idx in range(n_batches):
@@ -112,8 +111,6 @@ def train_model_for_single_epoch(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
         time_to_perform_model_step = time() - model_step_start_time
-        with time_to_run("train/add loss item to train total_loss"):
-            total_loss += loss.item()
         with time_to_run("train/wandb log"):
             wandb.log(
                 data=
@@ -146,7 +143,6 @@ def evaluate_model(
         training_samples_seen: int,
     ):
     model.eval()
-    test_loss = 0
     predictions = []
     true_masks = []
     n_batches = len(valid_loader)
@@ -160,8 +156,6 @@ def evaluate_model(
         with time_to_run("eval/forward pass"):
             y_pred_logits = model(image)
             loss, losses = criterion(y_pred_logits, y_true)
-        with time_to_run("eval/add loss item to train total_loss"):
-            test_loss += loss.item()
         with time_to_run("eval/move preds to CPU valid"):
             pred = torch.argmax(y_pred_logits, dim=1)
             true_masks.append(y_true.cpu().numpy().squeeze())

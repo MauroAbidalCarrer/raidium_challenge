@@ -6,14 +6,14 @@ ideas:
     - Use float/int8 convolution ? that would be dope
 
 todo:
-- Speed up stuff
+- Speed up stuff -> 13h
     - make dice score run on pytorch (use monai?)
     - understand why loss.item call is taking so much time and fix it
     - Leave x as uint8 and cast BATCH it to float 32 + apply normalization afterwards?
         - check this isn't what's breaking the training
     - asynchronize train/evaluate and as many other things as possible
-- save checkpoint as artifact on wandb asynchronously
-- Get to top 1 with unet?
+- save checkpoint as artifact on wandb asynchronously 13h30
+- Get to top 1 with unet and (run training while eating)?
     - Even bigger model 
     - Even more data aug?
     - retrain on full set (train+valid), not just train set

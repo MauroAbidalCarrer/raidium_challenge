@@ -10,11 +10,11 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @dataclass
 class DatasetConfig:
-    test_size: float = 0.2
+    test_size: float = 0.02
     transform: A.DualTransform = A.Compose(
         [
             A.Affine((0.5, 2), 0.2, fill=0),
-            A.CoarseDropout(num_holes_range=[1, 5], fill=0, p=0.75),
+            A.CoarseDropout(num_holes_range=[1, 8], fill=0, p=0.75),
         ],
         additional_targets={"mask": "mask"},
     )

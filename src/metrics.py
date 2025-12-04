@@ -20,15 +20,15 @@ from scipy.optimize import linear_sum_assignment
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def dice_pandas(y_true_df: pd.DataFrame, y_pred_df: pd.DataFrame, n_classes: int) -> float:
+def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray, n_classes: int) -> float:
     """
     Fully vectorized computation of the average Dice over samples and classes (skip background=0).
     This removes the Python loop over samples by using boolean broadcasting.
     Note: memory usage ~ O(S * P * K) where S = n_samples, P = pixels per sample, K = NUM_CLASSES.
     """
     # transpose to get shape (n_samples, n_pixels)
-    y_true = y_true_df.T.values  # shape (S, P)
-    y_pred = y_pred_df.T.values  # shape (S, P)
+    y_true = y_true_df.T  # shape (S, P)
+    y_pred = y_pred_df.T  # shape (S, P)
 
     if y_true.shape != y_pred.shape:
         raise ValueError("y_true and y_pred must have the same shape after transpose.")
@@ -93,79 +93,6 @@ def torch_dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     union = pred.sum(dim=(2, 3)) + target_one_hot.sum(dim=(2, 3))
     dice = (2. * intersection + smooth) / (union + smooth)
     return 1 - dice.mean()
-
-def one_hot_and_permute(x: Tensor) -> Tensor:
-    return (
-        torch.nn.functional.one_hot(
-            x,
-            num_classes=N_CLASSES,
-        )
-        .permute(0, 3, 1, 2)
-    )
-
-# @torch.no_grad # To make sure it's not used with a loss
-# def torch_dice_score(y_pred: Tensor, y_true: Tensor) -> Tensor:
-#     y_pred_one_hot = one_hot_and_permute(y_pred.argmax(dim=1))
-#     y_true_one_hot = one_hot_and_permute(y_true)
-#     intersection = (y_pred_one_hot * y_true_one_hot).sum(dim=(2, 3))
-#     union = y_pred_one_hot.sum(dim=(2, 3)) + y_true_one_hot.sum(dim=(2, 3))
-#     # Use nan as some preds and/or masks channels could be all zeros
-#     dice_scores = 2. * intersection / union
-#     channel_wise_dice = torch.nanmean(dice_scores, dim=0)
-#     dice_score = torch.nanmean(channel_wise_dice, dim=0)
-#     return dice_score
-
-@torch.no_grad
-def torch_dice_score(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
-    """
-    y_pred: (B, C, H, W)  predicted probabilities or logits
-    y_true: (B, H, W)     integer labels in [0, C-1]
-    
-    Computes:
-      - Dice per sample per class (skip background=0)
-      - ignore empty GT classes (nan)
-      - average over samples (nanmean), then over classes (nanmean)
-      - returns scalar tensor
-    """
-    B, C, H, W = y_pred.shape
-    device = y_pred.device
-
-    # Convert pred to discrete labels using argmax over channels
-    # Equivalent to the pandas version which expects integer maps
-    y_pred_labels = torch.argmax(y_pred, dim=1)    # (B, H, W)
-
-    # Classes 1..C-1
-    classes = torch.arange(1, C, device=device)    # (K,)
-    K = classes.numel()
-
-    # Build boolean masks: (B, H, W, K)
-    # same as numpy broadcasting: (S, P, K)
-    gt_mask = (y_true.unsqueeze(-1) == classes)           # bool(B,H,W,K)
-    pred_mask = (y_pred_labels.unsqueeze(-1) == classes)  # bool(B,H,W,K)
-
-    # Flatten spatial dims
-    gt_mask = gt_mask.view(B, -1, K)       # (B, P, K)
-    pred_mask = pred_mask.view(B, -1, K)   # (B, P, K)
-
-    # Intersection and sums
-    intersection = (gt_mask & pred_mask).sum(dim=1).float()  # (B, K)
-    sum_pred = pred_mask.sum(dim=1).float()                  # (B, K)
-    sum_gt   = gt_mask.sum(dim=1).float()                    # (B, K)
-
-    denom = sum_pred + sum_gt                                # (B, K)
-
-    # Dice per batch per class
-    dice_spc = torch.where(denom == 0,
-                           torch.nan,
-                           2.0 * intersection / denom)       # (B, K)
-
-    # nanmean over batch then over classes
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        cls_mean = torch.nanmean(dice_spc, dim=0)            # (K,)
-        final_mean = torch.nanmean(cls_mean)                 # scalar
-
-    return final_mean
 
 
 def get_class_weights() -> torch.Tensor:

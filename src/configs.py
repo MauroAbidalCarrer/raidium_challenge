@@ -1,25 +1,27 @@
 from typing import Sequence
 from dataclasses import dataclass, field
 
+import torch
 import albumentations as A
 
 
 N_CLASSES = 55
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @dataclass
 class DatasetConfig:
-    test_size: float = 0.2
+    test_size: float = 0.02
     transform: A.DualTransform = A.Compose(
         [
             A.Affine((0.5, 2), 0.2, fill=0),
-            A.CoarseDropout(num_holes_range=[1, 5], fill=0, p=0.75),
+            A.CoarseDropout(num_holes_range=[1, 8], fill=0, p=0.75),
         ],
         additional_targets={"mask": "mask"},
     )
 
 @dataclass
 class TrainingConfig:
-    batch_size: int = 1
+    batch_size: int = 64
     n_epochs: int = 600
     starting_lr: float = 5e-4
     cross_entropy_loss_weight: float = 1

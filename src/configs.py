@@ -25,7 +25,7 @@ class DatasetConfig:
 
 @dataclass
 class TrainingConfig:
-    batch_size: int = 64
+    batch_size: int = 128
     n_epochs: int = 600
     starting_lr: float = 5e-4
     cross_entropy_loss_weight: float = 1

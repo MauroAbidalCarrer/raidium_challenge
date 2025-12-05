@@ -1,3 +1,4 @@
+import torch
 from sklearn.model_selection import train_test_split
 
 from src.models import mk_model
@@ -23,7 +24,7 @@ def main():
     )
     x_test = x_test.cpu()
     criterion = SegmentationLoss(train_cfg)
-    model = mk_model(train_cfg, model_cfg)
+    model = torch.compile(mk_model(train_cfg, model_cfg))
     train_loader, valid_loader = dataset.get_data_loaders(
         x_train,
         y_train,

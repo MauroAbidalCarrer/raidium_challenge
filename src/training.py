@@ -1,5 +1,5 @@
 import os
-from time import time
+import warnings
 from tqdm import tqdm
 from typing import (
     Callable,
@@ -21,10 +21,13 @@ from src.timing import time_to_run, print_time_dict
 from src.configs import TrainingConfig, DatasetConfig, N_CLASSES, DEVICE
 
 
+# Pro tip: Never fix warnings causes
+warnings.filterwarnings("ignore", message="RandomErasing")
 criterion_type = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
 WANDB_LOG_COMMIT_INTERVAL = 100
 
 
+# @torch.compile
 def train_unet(
         model: nn.Module,
         dataset_cfg: DatasetConfig,
@@ -95,48 +98,28 @@ def train_model_for_single_epoch(
     train_loader = iter(train_loader)
     for batch_idx in range(n_batches):
         with time_to_run("train/get batch"):
-            image, y_true = next(train_loader)
-        with time_to_run("train/move to device"):
-            image = image.to(device=DEVICE)
-            y_true = y_true.to(device=DEVICE)
-        with time_to_run("train/data_aug"):
-            # We have to recall Mask constructor because the dataloader gives Tensors
-            image, y_true = dataset_cfg.transform(image, Mask(y_true))
-        model_step_start_time = time()
-        with time_to_run("train/forward pass"):
-            optimizer.zero_grad()
-            with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
-                y_pred_logits = model(image)
-                loss, losses = criterion(y_pred_logits, y_true)
-        with time_to_run("train/backward pass"):
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-        time_to_perform_model_step = time() - model_step_start_time
-        with time_to_run("train/wandb log"):
-            if step % WANDB_LOG_COMMIT_INTERVAL == 0:
-                wandb.log(
-                    data=
-                    {
-                        **{"training/" + k: l.item() for k, l in losses.items()},
-                        "performance/time_to_perform_model_step": time_to_perform_model_step,
-                        "training/samples_seen": training_samples_seen,
-                    },
-                    step=step,
-                    commit=step % WANDB_LOG_COMMIT_INTERVAL == 0,
-                )
+            x, y_true = next(train_loader)
+        with time_to_run("train/to_device and to mask"):
+            x = x.to(device=DEVICE)
+            y_true = Mask(y_true.to(device=DEVICE))
+        with time_to_run("train/data aug"):
+            x, y_true = dataset_cfg.transform(x, y_true)
+        with time_to_run("train/step"):
+            model_step(model, x, y_true, optimizer, dataset_cfg, criterion)
         step += 1
-        training_samples_seen += len(image)
-    with time_to_run("train/wandb log dice score & samples seen"):
-        wandb.log(
-            data={
-                "training/samples_seen": training_samples_seen,
-            },
-            step=step,
-        )
+        training_samples_seen += len(x)
     return step, training_samples_seen
 
-@torch.no_grad
+@torch.compile
+def model_step(model: nn.Module, x: Tensor, y_true: Tensor, optimizer: torch.optim.Optimizer, dataset_cfg: DatasetConfig, criterion: criterion_type):
+    optimizer.zero_grad()
+    with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
+        y_pred_logits = model(x)
+        loss, losses = criterion(y_pred_logits, y_true)
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+    optimizer.step()
+
 def evaluate_model(
         model: nn.Module,
         valid_loader: DataLoader,

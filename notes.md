@@ -4,19 +4,19 @@ Documentation
 ideas:
 - find some way of loss normalization?
     - Use float/int8 convolution ? that would be dope
+- make dice score run on pytorch?
+- asynchronize train/evaluate?
 
 todo:
-- Speed up stuff
-    - make dice score run on pytorch
-    - use torch compile?
-    - asynchronize train/evaluate and as many other things as possible
-- save checkpoint as artifact on wandb asynchronously 
+- make training more data efficient, try to get the same (or a better) score with ~30 epochs
+    - self supervised learning
+- hyper parameter tuning with optuna
+- save checkpoint as artifact on wandb
+- Fewer epochs per training runs 
+- parrallel training run multiple processes on the same GPU?
 - Get to top 1 with unet and (run training while eating)?
-    - Even bigger model 
-    - Even more data aug?
     - retrain on full set (train+valid), not just train set
     - use TTA
-- hyper parameter tuning with optuna
 - self supervised learning:
     - patch prediction?
     - simCLR?
@@ -42,3 +42,4 @@ todo:
     - increase model size (make sure receptive field reaches the entire picture)
     - use better data augmentation -->
 <!-- - speed up data aug by using torchvision.tranform.v2 -->
+<!-- - use torch compile -->

@@ -4,15 +4,16 @@ Documentation
 ideas:
 - find some way of loss normalization?
     - Use float/int8 convolution ? that would be dope
+- make dice score run on pytorch?
+- asynchronize train/evaluate?
 
 todo:
-- Speed up stuff
-    - make dice score run on pytorch
-    - asynchronize train/evaluate?
+- make training more data efficient, try to get the same (or a better) score with ~30 epochs
+    - self supervised learning
+- hyper parameter tuning with optuna
 - save checkpoint as artifact on wandb
 - Fewer epochs per training runs 
 - parrallel training run multiple processes on the same GPU?
-- hyper parameter tuning with optuna
 - Get to top 1 with unet and (run training while eating)?
     - retrain on full set (train+valid), not just train set
     - use TTA

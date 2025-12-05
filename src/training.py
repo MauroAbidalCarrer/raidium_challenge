@@ -96,40 +96,15 @@ def train_model_for_single_epoch(
     n_batches = len(train_loader)
     train_loader = iter(train_loader)
     for batch_idx in range(n_batches):
-        # with time_to_run("train/get batch"):
-        x, y_true = next(train_loader)
-        x = x.to(device=DEVICE)
-        y_true = Mask(y_true.to(device=DEVICE))
-        x, y_true = dataset_cfg.transform(x, y_true)
-        model_step(model, x, y_true, optimizer, dataset_cfg, criterion)
-        # with torch.compile():
-        #     # with time_to_run("train/move to device"):
-        #     # with time_to_run("train/data_aug"):
-        #     # We have to recall Mask constructor because the dataloader gives Tensors
-        #     image, y_true = dataset_cfg.transform(image, y_true)
-        #     # model_step_start_time = time()
-        #     # with time_to_run("train/forward pass"):
-        #     optimizer.zero_grad()
-        #     with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
-        #         y_pred_logits = model(image)
-        #         loss, losses = criterion(y_pred_logits, y_true)
-        #     # with time_to_run("train/backward pass"):
-        #     loss.backward()
-        #     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        #     optimizer.step()
-        # time_to_perform_model_step = time() - model_step_start_time
-        # with time_to_run("train/wandb log"):
-        # if step % WANDB_LOG_COMMIT_INTERVAL == 0:
-        #     wandb.log(
-        #         data=
-        #         {
-        #             **{"training/" + k: l.item() for k, l in losses.items()},
-        #             # "performance/time_to_perform_model_step": time_to_perform_model_step,
-        #             "training/samples_seen": training_samples_seen,
-        #         },
-        #         step=step,
-        #         commit=step % WANDB_LOG_COMMIT_INTERVAL == 0,
-        #     )
+        with time_to_run("train/get batch"):
+            x, y_true = next(train_loader)
+        with time_to_run("train/to_device and to mask"):
+            x = x.to(device=DEVICE)
+            y_true = Mask(y_true.to(device=DEVICE))
+        with time_to_run("train/data aug"):
+            x, y_true = dataset_cfg.transform(x, y_true)
+        with time_to_run("train/step"):
+            model_step(model, x, y_true, optimizer, dataset_cfg, criterion)
         step += 1
         training_samples_seen += len(x)
     return step, training_samples_seen

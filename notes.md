@@ -9,7 +9,15 @@ ideas:
 
 todo:
 - make training more data efficient, try to get the same (or a better) score with ~30 epochs
-    - self supervised learning
+    - self supervised learning 
+        - ssl pretraining:
+            - Change output channels: 55 classes + 1 pixel value (maybe round to nearest power of two -> 64)
+            - for each batch: add patches of noise to the input and a mask of where the noise was added
+            - get model output, zero out image and model output where no noise was applied
+            - express loss as MSE between whatever channel we chose as the pixle channel (maybe the last one?)
+        - supervised learning finetuning: 
+            - freeze the encoder?
+            - train the model as usual on all but the pixel channel output
 - hyper parameter tuning with optuna
 - save checkpoint as artifact on wandb
 - Fewer epochs per training runs 

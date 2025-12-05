@@ -23,8 +23,8 @@ def get_data_loaders(
         y_valid: Tensor,
         train_cfg: TrainingConfig,
     ):
-    train_ds = TensorDataset(x_train.to(DEVICE), tv_tensors.Mask(y_train.to(DEVICE)))
-    valid_ds = TensorDataset(x_valid.to(DEVICE), tv_tensors.Mask(y_valid.to(DEVICE)))
+    train_ds = TensorDataset(x_train.to(DEVICE), y_train.to(DEVICE))
+    valid_ds = TensorDataset(x_valid.to(DEVICE), y_valid.to(DEVICE))
 
     train_loader = DataLoader(train_ds, batch_size=train_cfg.batch_size, shuffle=True)
     valid_batch_size = int(np.clip(train_cfg.batch_size * 2, 1, 64))

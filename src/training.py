@@ -100,7 +100,8 @@ def train_model_for_single_epoch(
             image = image.to(device=DEVICE)
             y_true = y_true.to(device=DEVICE)
         with time_to_run("train/data_aug"):
-            image, y_true = dataset_cfg.transform(image, y_true)
+            # We have to recall Mask constructor because the dataloader gives Tensors
+            image, y_true = dataset_cfg.transform(image, Mask(y_true))
         model_step_start_time = time()
         with time_to_run("train/forward pass"):
             optimizer.zero_grad()

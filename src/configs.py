@@ -6,6 +6,7 @@ from torchvision.transforms import v2
 
 
 N_CLASSES = 55
+PIXEL_VALue_CHANNEL_IDX = N_CLASSES
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @dataclass

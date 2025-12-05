@@ -12,8 +12,8 @@ import torch
 import wandb
 import numpy as np
 from torch import nn, Tensor
-from torchvision.tv_tensors import Mask
 from torch.utils.data import DataLoader
+from torchvision.tv_tensors import Mask
 
 from src.metrics import dice_pandas
 from src.timing import time_to_run, print_time_dict
@@ -119,7 +119,7 @@ def train_model_for_single_epoch(
     return step, training_samples_seen
 
 @torch.compile
-def model_step(model: nn.Module, x: Tensor, y_true: Tensor, optimizer: torch.optim.Optimizer, dataset_cfg: DatasetConfig, criterion: criterion_type):
+def model_step(model: nn.Module, x: Tensor, y_true: Tensor, optimizer: torch.optim.Optimizer, criterion: criterion_type):
     optimizer.zero_grad()
     with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
         y_pred_logits = model(x)

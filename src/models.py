@@ -2,18 +2,15 @@ import torch
 from torch import nn
 from monai.networks.nets import UNet
 
-from src.configs import TrainingConfig, ModelConfig, N_CLASSES
+from src.configs import ModelConfig, N_CLASSES, DEVICE
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def mk_model(train_cfg: TrainingConfig, model_cfg: ModelConfig) -> nn.Module:
+def mk_model(model_cfg: ModelConfig, compile: bool=True) -> nn.Module:
     model = (
         UNet(
             spatial_dims=2,
             in_channels=1,
-            out_channels=N_CLASSES,
+            out_channels=N_CLASSES + 1,
             channels=model_cfg.channels,
             strides=model_cfg.strides,
             kernel_size=model_cfg.kernel_size,
@@ -23,7 +20,9 @@ def mk_model(train_cfg: TrainingConfig, model_cfg: ModelConfig) -> nn.Module:
             dropout=model_cfg.dropout,
             bias=model_cfg.bias,
         )
-        .to(device)
+        .to(DEVICE)
     )
     model.cfg = model_cfg
+    if compile:
+        model = torch.compile(model)
     return model

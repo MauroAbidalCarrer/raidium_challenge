@@ -7,7 +7,6 @@ ideas:
 
 todo:
 - Speed up stuff
-    - speed up data aug by using torchvision.tranform.v2
     - make dice score run on pytorch
     - use torch compile?
     - asynchronize train/evaluate and as many other things as possible
@@ -42,3 +41,4 @@ todo:
 <!-- - get to ~44 dice with just nnUNet(almost done):
     - increase model size (make sure receptive field reaches the entire picture)
     - use better data augmentation -->
+<!-- - speed up data aug by using torchvision.tranform.v2 -->

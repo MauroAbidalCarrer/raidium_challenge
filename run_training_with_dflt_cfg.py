@@ -30,7 +30,6 @@ def main():
         x_valid,
         y_valid,
         train_cfg,
-        dataset_cfg,
     )    
     train_unet(
         model,

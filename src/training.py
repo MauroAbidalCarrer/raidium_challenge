@@ -104,9 +104,9 @@ def train_model_for_single_epoch(
         model_step_start_time = time()
         with time_to_run("train/forward pass"):
             optimizer.zero_grad()
-            # with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
-            y_pred_logits = model(image)
-            loss, losses = criterion(y_pred_logits, y_true)
+            with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
+                y_pred_logits = model(image)
+                loss, losses = criterion(y_pred_logits, y_true)
         with time_to_run("train/backward pass"):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)

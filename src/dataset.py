@@ -13,7 +13,7 @@ from torchvision import tv_tensors
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
 
-from src.configs import TrainingConfig, DatasetConfig, DEVICE
+from src.configs import TrainingConfig, DEVICE
 
 
 def get_data_loaders(
@@ -22,19 +22,7 @@ def get_data_loaders(
         x_valid: Tensor,
         y_valid: Tensor,
         train_cfg: TrainingConfig,
-        dataset_cfg: DatasetConfig,
     ):
-    # train_ds = SegmentationDataset(
-    #     images=x_train,
-    #     masks=y_train,
-    #     transform=dataset_cfg.transform,
-    # )
-
-    # valid_ds = SegmentationDataset(
-    #     images=x_valid,
-    #     masks=y_valid,
-    #     transform=None,   # no augmentation for validation
-    # )
     train_ds = TensorDataset(x_train, tv_tensors.Mask(y_train))
     valid_ds = TensorDataset(x_valid, tv_tensors.Mask(y_valid))
 
@@ -43,34 +31,6 @@ def get_data_loaders(
     valid_loader = DataLoader(valid_ds, batch_size=valid_batch_size, shuffle=False)
 
     return train_loader, valid_loader
-
-# class SegmentationDataset(torch.utils.data.Dataset):
-#     def __init__(self, images: Tensor, masks: Tensor, transform=None):
-#         self.images = images
-#         self.masks = masks
-#         self.transform = transform
-
-#     def __len__(self):
-#         return len(self.images)
-
-#     def __getitem__(self, idx):
-#         img = self.images[idx].cpu().numpy()  # Albumentations expects numpy HWC
-#         mask = self.masks[idx].cpu().numpy()
-
-#         # If tensor is CHW convert to HWC
-#         if img.ndim == 3:
-#             img = img.transpose(1, 2, 0)
-
-#         if self.transform:
-#             augmented = self.transform(image=img, mask=mask)
-#             img = augmented["image"]
-#             mask = augmented["mask"]
-
-#         # back to torch
-#         img = torch.tensor(img).permute(2, 0, 1).float()
-#         mask = torch.tensor(mask).long()
-#         return img, mask
-
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """

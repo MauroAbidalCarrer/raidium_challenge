@@ -27,17 +27,19 @@ def get_data_loaders(
         train_cfg: TrainingConfig,
         dataset_cfg: DatasetConfig,
     ):
-    train_ds = SegmentationDataset(
-        images=x_train,
-        masks=y_train,
-        transform=dataset_cfg.transform,
-    )
+    # train_ds = SegmentationDataset(
+    #     images=x_train,
+    #     masks=y_train,
+    #     transform=dataset_cfg.transform,
+    # )
 
-    valid_ds = SegmentationDataset(
-        images=x_valid,
-        masks=y_valid,
-        transform=None,   # no augmentation for validation
-    )
+    # valid_ds = SegmentationDataset(
+    #     images=x_valid,
+    #     masks=y_valid,
+    #     transform=None,   # no augmentation for validation
+    # )
+    train_ds = torch.utils.data.TensorDataset(x_train, y_train)
+    valid_ds = torch.utils.data.TensorDataset(x_valid, y_valid)
 
     train_loader = DataLoader(train_ds, batch_size=train_cfg.batch_size, shuffle=True)
     valid_batch_size = int(np.clip(train_cfg.batch_size * 2, 1, 64))
@@ -45,32 +47,32 @@ def get_data_loaders(
 
     return train_loader, valid_loader
 
-class SegmentationDataset(torch.utils.data.Dataset):
-    def __init__(self, images: Tensor, masks: Tensor, transform=None):
-        self.images = images
-        self.masks = masks
-        self.transform = transform
+# class SegmentationDataset(torch.utils.data.Dataset):
+#     def __init__(self, images: Tensor, masks: Tensor, transform=None):
+#         self.images = images
+#         self.masks = masks
+#         self.transform = transform
 
-    def __len__(self):
-        return len(self.images)
+#     def __len__(self):
+#         return len(self.images)
 
-    def __getitem__(self, idx):
-        img = self.images[idx].cpu().numpy()  # Albumentations expects numpy HWC
-        mask = self.masks[idx].cpu().numpy()
+#     def __getitem__(self, idx):
+#         img = self.images[idx].cpu().numpy()  # Albumentations expects numpy HWC
+#         mask = self.masks[idx].cpu().numpy()
 
-        # If tensor is CHW convert to HWC
-        if img.ndim == 3:
-            img = img.transpose(1, 2, 0)
+#         # If tensor is CHW convert to HWC
+#         if img.ndim == 3:
+#             img = img.transpose(1, 2, 0)
 
-        if self.transform:
-            augmented = self.transform(image=img, mask=mask)
-            img = augmented["image"]
-            mask = augmented["mask"]
+#         if self.transform:
+#             augmented = self.transform(image=img, mask=mask)
+#             img = augmented["image"]
+#             mask = augmented["mask"]
 
-        # back to torch
-        img = torch.tensor(img).permute(2, 0, 1).float()
-        mask = torch.tensor(mask).long()
-        return img, mask
+#         # back to torch
+#         img = torch.tensor(img).permute(2, 0, 1).float()
+#         mask = torch.tensor(mask).long()
+#         return img, mask
 
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
@@ -151,16 +153,15 @@ def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
         imgs[img_idx, 0] = torchvision.io.decode_image(image_file)[0]
     return imgs
 
-
 def download_raw_dataset():
     shutil.rmtree("path/to/directory", ignore_errors=True)
     raw_pth = Path("dataset/raw")
     raw_pth.mkdir(parents=True, exist_ok=True)
-    get_and_unzip(
+    wget_and_unzip(
         "https://challengedata.ens.fr/media/public/train-images.zip",
         "dataset/raw/x-train",
     )
-    get_and_unzip(
+    wget_and_unzip(
         "https://challengedata.ens.fr/media/public/test-images.zip",
         "dataset/raw/x-test",
     )
@@ -173,7 +174,7 @@ def download_raw_dataset():
         "dataset/raw/y-train.csv",
     )
 
-def get_and_unzip(url: str, path: str | Path):
+def wget_and_unzip(url: str, path: str | Path):
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
 

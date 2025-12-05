@@ -85,7 +85,7 @@ def train_model_for_single_epoch(
         optimizer: torch.optim.Optimizer,
         train_loader: DataLoader,
         criterion: criterion_type,
-        train_cfg: TrainingConfig,
+        dataset_cfg: DatasetConfig,
         step: int,
         training_samples_seen: int,
     ) -> tuple[int, int]:
@@ -95,6 +95,9 @@ def train_model_for_single_epoch(
     for batch_idx in range(n_batches):
         with time_to_run("train/get batch"):
             image, y_true = next(train_loader)
+        with time_to_run("train/data_aug"):
+            image, y_true = image.cpu().numpy(), y_true.cpu().numpy()
+            image = dataset_cfg.transform(image)
         with time_to_run("train/move to device"):
             image = image.to(device=DEVICE)
             y_true = y_true.to(device=DEVICE)

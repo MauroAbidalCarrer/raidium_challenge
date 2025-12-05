@@ -6,24 +6,22 @@ ideas:
     - Use float/int8 convolution ? that would be dope
 
 todo:
-- Speed up stuff -> 13h
-    - make dice score run on pytorch (use monai?)
-    - understand why loss.item call is taking so much time and fix it
-    - Leave x as uint8 and cast BATCH it to float 32 + apply normalization afterwards?
-        - check this isn't what's breaking the training
+- Speed up stuff
+    - speed up data aug by performing it in batches instead of per item
+    - make dice score run on pytorch
     - use torch compile?
     - asynchronize train/evaluate and as many other things as possible
-- save checkpoint as artifact on wandb asynchronously 13h30
+- save checkpoint as artifact on wandb asynchronously 
 - Get to top 1 with unet and (run training while eating)?
     - Even bigger model 
     - Even more data aug?
     - retrain on full set (train+valid), not just train set
     - use TTA
+- hyper parameter tuning with optuna
 - self supervised learning:
     - patch prediction?
     - simCLR?
     - teacher/student? (probably later)
-- hyper parameter tuning with optuna
 - understand why/fix the fact that higher batch sizes breaks training
     - Could it be because we are using instance norm? maybe switch to batch norm?
 - stratify train test split

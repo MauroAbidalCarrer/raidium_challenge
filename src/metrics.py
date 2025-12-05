@@ -64,6 +64,7 @@ class SegmentationLoss:
         ### Returns:
         Dictionnary of loss_average, ce_loss and dice_loss
         """
+        y_true = y_true.long()
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
         base_d_loss = torch_dice_loss(y_pred, y_true)
         loss = base_d_loss * self.train_cfg.dice_loss_weight \

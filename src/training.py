@@ -1,5 +1,5 @@
 import os
-from time import time
+import warnings
 from tqdm import tqdm
 from typing import (
     Callable,
@@ -21,6 +21,8 @@ from src.timing import time_to_run, print_time_dict
 from src.configs import TrainingConfig, DatasetConfig, N_CLASSES, DEVICE
 
 
+# Pro tip: Never fix warnings causes
+warnings.filterwarnings("ignore", message="RandomErasing")
 criterion_type = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
 WANDB_LOG_COMMIT_INTERVAL = 100
 
@@ -82,7 +84,6 @@ def wandb_init(train_cfg: TrainingConfig, dataset_cfg: DatasetConfig, model: nn.
         },
     )
 
-# @torch.compile
 def train_model_for_single_epoch(
         model: nn.Module,
         optimizer: torch.optim.Optimizer,
@@ -111,18 +112,14 @@ def train_model_for_single_epoch(
 
 @torch.compile
 def model_step(model: nn.Module, x: Tensor, y_true: Tensor, optimizer: torch.optim.Optimizer, dataset_cfg: DatasetConfig, criterion: criterion_type):
-    # model_step_start_time = time()
-    # with time_to_run("train/forward pass"):
     optimizer.zero_grad()
     with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
         y_pred_logits = model(x)
         loss, losses = criterion(y_pred_logits, y_true)
-    # with time_to_run("train/backward pass"):
     loss.backward()
     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
     optimizer.step()
 
-# @torch.no_grad
 def evaluate_model(
         model: nn.Module,
         valid_loader: DataLoader,

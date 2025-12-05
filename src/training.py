@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from torch import nn, Tensor
 from monai.metrics import DiceMetric
+from torchvision.tv_tensors import Mask
 from torch.utils.data import DataLoader
 
 from src.metrics import dice_pandas
@@ -47,7 +48,7 @@ def train_unet(
                 optimizer,
                 train_loader,
                 criterion,
-                train_cfg,
+                dataset_cfg,
                 step,
                 training_samples_seen,
             )
@@ -85,7 +86,7 @@ def train_model_for_single_epoch(
         optimizer: torch.optim.Optimizer,
         train_loader: DataLoader,
         criterion: criterion_type,
-        train_cfg: TrainingConfig,
+        dataset_cfg: DatasetConfig,
         step: int,
         training_samples_seen: int,
     ) -> tuple[int, int]:
@@ -98,6 +99,9 @@ def train_model_for_single_epoch(
         with time_to_run("train/move to device"):
             image = image.to(device=DEVICE)
             y_true = y_true.to(device=DEVICE)
+        with time_to_run("train/data_aug"):
+            # We have to recall Mask constructor because the dataloader gives Tensors
+            image, y_true = dataset_cfg.transform(image, Mask(y_true))
         model_step_start_time = time()
         with time_to_run("train/forward pass"):
             optimizer.zero_grad()

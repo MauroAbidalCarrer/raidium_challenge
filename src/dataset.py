@@ -9,14 +9,11 @@ import torchvision
 import numpy as np
 import pandas as pd
 from torch import Tensor
-import albumentations as A
+from torchvision import tv_tensors
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
 
-from src.configs import TrainingConfig, DatasetConfig
-
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from src.configs import TrainingConfig, DEVICE
 
 
 def get_data_loaders(
@@ -25,53 +22,15 @@ def get_data_loaders(
         x_valid: Tensor,
         y_valid: Tensor,
         train_cfg: TrainingConfig,
-        dataset_cfg: DatasetConfig,
     ):
-    train_ds = SegmentationDataset(
-        images=x_train,
-        masks=y_train,
-        transform=dataset_cfg.transform,
-    )
-
-    valid_ds = SegmentationDataset(
-        images=x_valid,
-        masks=y_valid,
-        transform=None,   # no augmentation for validation
-    )
+    train_ds = TensorDataset(x_train.to(DEVICE), y_train.to(DEVICE))
+    valid_ds = TensorDataset(x_valid.to(DEVICE), y_valid.to(DEVICE))
 
     train_loader = DataLoader(train_ds, batch_size=train_cfg.batch_size, shuffle=True)
     valid_batch_size = int(np.clip(train_cfg.batch_size * 2, 1, 64))
     valid_loader = DataLoader(valid_ds, batch_size=valid_batch_size, shuffle=False)
 
     return train_loader, valid_loader
-
-class SegmentationDataset(torch.utils.data.Dataset):
-    def __init__(self, images: Tensor, masks: Tensor, transform=None):
-        self.images = images
-        self.masks = masks
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, idx):
-        img = self.images[idx].cpu().numpy()  # Albumentations expects numpy HWC
-        mask = self.masks[idx].cpu().numpy()
-
-        # If tensor is CHW convert to HWC
-        if img.ndim == 3:
-            img = img.transpose(1, 2, 0)
-
-        if self.transform:
-            augmented = self.transform(image=img, mask=mask)
-            img = augmented["image"]
-            mask = augmented["mask"]
-
-        # back to torch
-        img = torch.tensor(img).permute(2, 0, 1).float()
-        mask = torch.tensor(mask).long()
-        return img, mask
-
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """
@@ -151,16 +110,15 @@ def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
         imgs[img_idx, 0] = torchvision.io.decode_image(image_file)[0]
     return imgs
 
-
 def download_raw_dataset():
     shutil.rmtree("path/to/directory", ignore_errors=True)
     raw_pth = Path("dataset/raw")
     raw_pth.mkdir(parents=True, exist_ok=True)
-    get_and_unzip(
+    wget_and_unzip(
         "https://challengedata.ens.fr/media/public/train-images.zip",
         "dataset/raw/x-train",
     )
-    get_and_unzip(
+    wget_and_unzip(
         "https://challengedata.ens.fr/media/public/test-images.zip",
         "dataset/raw/x-test",
     )
@@ -173,7 +131,7 @@ def download_raw_dataset():
         "dataset/raw/y-train.csv",
     )
 
-def get_and_unzip(url: str, path: str | Path):
+def wget_and_unzip(url: str, path: str | Path):
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
 

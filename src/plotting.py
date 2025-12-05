@@ -7,16 +7,16 @@ import matplotlib.pyplot as plt
 
 
 def plt_sample(slice_image: Tensor, *seg_masks):
-    fig, axes = plt.subplots(1, 1 + len(seg_masks))
-    fig = fig.set_size_inches(15, 15)
-    axes[0].imshow(slice_image, cmap="gray")
+    fig, axes = plt.subplots(1, 1 + len(seg_masks), squeeze=False)
+    fig = fig.set_size_inches(10, 10)
+    axes[0, 0].imshow(slice_image, cmap="gray")
     for seg_i, seg_mask in enumerate(seg_masks):
-        axes[seg_i + 1].imshow(slice_image, cmap="gray")
+        axes[0, seg_i + 1].imshow(slice_image, cmap="gray")
         seg_masked = np.ma.masked_where(seg_mask == 0, seg_mask)
-        axes[seg_i + 1].imshow(seg_masked, cmap="tab20")
+        axes[0, seg_i + 1].imshow(seg_masked, cmap="tab20")
     plt.axis("off")
     plt.show()
-
+    
 @torch.no_grad
 def plt_pred(
         model: nn.Module,

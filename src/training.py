@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from torch import nn, Tensor
 from monai.metrics import DiceMetric
+from torchvision.tv_tensors import Mask
 from torch.utils.data import DataLoader
 
 from src.metrics import dice_pandas
@@ -47,7 +48,7 @@ def train_unet(
                 optimizer,
                 train_loader,
                 criterion,
-                train_cfg,
+                dataset_cfg,
                 step,
                 training_samples_seen,
             )
@@ -95,18 +96,17 @@ def train_model_for_single_epoch(
     for batch_idx in range(n_batches):
         with time_to_run("train/get batch"):
             image, y_true = next(train_loader)
-        with time_to_run("train/data_aug"):
-            image, y_true = image.cpu().numpy(), y_true.cpu().numpy()
-            image = dataset_cfg.transform(image)
         with time_to_run("train/move to device"):
             image = image.to(device=DEVICE)
             y_true = y_true.to(device=DEVICE)
+        with time_to_run("train/data_aug"):
+            image, y_true = dataset_cfg.transform(image, y_true)
         model_step_start_time = time()
         with time_to_run("train/forward pass"):
             optimizer.zero_grad()
-            with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
-                y_pred_logits = model(image)
-                loss, losses = criterion(y_pred_logits, y_true)
+            # with torch.autocast(device_type=DEVICE.type, dtype=torch.bfloat16):
+            y_pred_logits = model(image)
+            loss, losses = criterion(y_pred_logits, y_true)
         with time_to_run("train/backward pass"):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)

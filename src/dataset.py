@@ -9,14 +9,11 @@ import torchvision
 import numpy as np
 import pandas as pd
 from torch import Tensor
-import albumentations as A
+from torchvision import tv_tensors
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
 
-from src.configs import TrainingConfig, DatasetConfig
-
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from src.configs import TrainingConfig, DatasetConfig, DEVICE
 
 
 def get_data_loaders(
@@ -38,8 +35,8 @@ def get_data_loaders(
     #     masks=y_valid,
     #     transform=None,   # no augmentation for validation
     # )
-    train_ds = torch.utils.data.TensorDataset(x_train, y_train)
-    valid_ds = torch.utils.data.TensorDataset(x_valid, y_valid)
+    train_ds = TensorDataset(x_train, tv_tensors.Mask(y_train))
+    valid_ds = TensorDataset(x_valid, tv_tensors.Mask(y_valid))
 
     train_loader = DataLoader(train_ds, batch_size=train_cfg.batch_size, shuffle=True)
     valid_batch_size = int(np.clip(train_cfg.batch_size * 2, 1, 64))

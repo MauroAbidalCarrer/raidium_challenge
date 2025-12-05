@@ -2,7 +2,7 @@ from typing import Sequence
 from dataclasses import dataclass, field
 
 import torch
-import albumentations as A
+from torchvision.transforms import v2
 
 
 N_CLASSES = 55
@@ -11,13 +11,11 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @dataclass
 class DatasetConfig:
     test_size: float = 0.02
-    transform: A.DualTransform = A.Compose(
-        [
-            A.Affine((0.5, 2), 0.2, fill=0),
-            A.CoarseDropout(num_holes_range=[1, 8], fill=0, p=0.75),
-        ],
-        additional_targets={"mask": "mask"},
-    )
+    transform: v2.Transform = v2.Compose([
+        v2.RandomErasing(p=1, scale=(0.05, 0.1)),
+        v2.RandomErasing(p=1, scale=(0.05, 0.1)),
+        v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
+    ])
 
 @dataclass
 class TrainingConfig:

@@ -2,7 +2,7 @@ import torch
 from sklearn.model_selection import train_test_split
 
 from src.models import mk_model
-from src.training import train_unet
+from src.training import train_model
 from src.metrics import SegmentationLoss
 from src import dataset
 from src.dataset import load_preprocessed_dataset
@@ -32,7 +32,7 @@ def main():
         y_valid,
         train_cfg,
     )    
-    train_unet(
+    train_model(
         model,
         dataset_cfg,
         train_cfg,

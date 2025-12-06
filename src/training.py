@@ -2,6 +2,7 @@ import os
 import warnings
 from tqdm import tqdm
 from typing import (
+    Optional,
     Callable,
     Dict,
     Tuple,
@@ -27,8 +28,7 @@ criterion_type = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
 WANDB_LOG_COMMIT_INTERVAL = 100
 
 
-# @torch.compile
-def train_unet(
+def train_model(
         model: nn.Module,
         dataset_cfg: DatasetConfig,
         train_cfg: TrainingConfig,
@@ -36,14 +36,17 @@ def train_unet(
         valid_loader: DataLoader,
         criterion: criterion_type,
         save_checkpoint: bool=True,
-    ):
-    wandb_init(train_cfg, dataset_cfg, model)
+        print_time_to_run: bool=True,
+        hp_tuning_group: Optional[str]=None,
+    ) -> float:
+    wandb_init(train_cfg, dataset_cfg, model, hp_tuning_group)
     torch.backends.cuda.matmul.fp32_precision = 'ieee'
 
     optimizer = torch.optim.Adam(model.parameters(), lr=train_cfg.starting_lr)
     model = model.to(DEVICE)
     step = 0
     training_samples_seen = 0
+    valid_dice_score = None
     for epoch in tqdm(range(train_cfg.n_epochs)):
         with time_to_run("train/total"):
             step, training_samples_seen = train_model_for_single_epoch(
@@ -56,7 +59,7 @@ def train_unet(
                 training_samples_seen,
             )
         with time_to_run("eval/total"):
-            evaluate_model(
+            valid_dice_score = evaluate_model(
                 model,
                 valid_loader,
                 criterion,
@@ -69,12 +72,18 @@ def train_unet(
             if save_checkpoint:
                 os.makedirs("checkpoints", exist_ok=True)
                 torch.save(model.state_dict(), f'checkpoints/checkpoint_epoch{epoch}.pth')
-
-        print_time_dict()
+        if print_time_to_run:
+            print_time_dict()
 
     wandb.finish()
+    return valid_dice_score
 
-def wandb_init(train_cfg: TrainingConfig, dataset_cfg: DatasetConfig, model: nn.Module):
+def wandb_init(
+        train_cfg: TrainingConfig,
+        dataset_cfg: DatasetConfig,
+        model: nn.Module,
+        hp_tuning_group: Optional[str]=None,
+    ):
     wandb.init(
         project="raidium-challenge",
         config={
@@ -82,6 +91,8 @@ def wandb_init(train_cfg: TrainingConfig, dataset_cfg: DatasetConfig, model: nn.
             **(vars(dataset_cfg)),
             **(vars(model.cfg) if hasattr(model, "cfg") else {}),
         },
+        tags= ["hp_tuning"] if hp_tuning_group is not None else None,
+        group=hp_tuning_group,
     )
 
 def train_model_for_single_epoch(
@@ -124,10 +135,9 @@ def evaluate_model(
         model: nn.Module,
         valid_loader: DataLoader,
         criterion: criterion_type,
-        train_cfg: TrainingConfig,
         step: int,
         training_samples_seen: int,
-    ):
+    ) -> float:
     model.eval()
     predictions = []
     true_masks = []
@@ -159,3 +169,4 @@ def evaluate_model(
             },
             step=step,
         )
+    return dice_score

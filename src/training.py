@@ -63,7 +63,6 @@ def train_model(
                 model,
                 valid_loader,
                 criterion,
-                train_cfg,
                 step,
                 training_samples_seen,
             )

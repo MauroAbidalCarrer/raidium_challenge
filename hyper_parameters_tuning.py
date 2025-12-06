@@ -24,9 +24,9 @@ def main():
 
     france_date = datetime.now(timezone('Europe/Paris'))
     hp_tuning_group = "start_lr+beta1_hp_" + france_date.strftime("%y-%m-%d:%H%M")
-    def objective(starting_lr: float) -> float:
+    def objective(trial: optuna.trial.Trial, x_train, y_train) -> float:
         train_cfg = TrainingConfig(
-            starting_lr=starting_lr,
+            starting_lr=trial.suggest_float("starting_lr", low=1e-5, high=1e-2),
             n_epochs=50,
         )
         model = torch.compile(mk_model(train_cfg, model_cfg))
@@ -60,7 +60,7 @@ def main():
 
     study = optuna.create_study(direction="maximize")
     study.optimize(
-        objective,
+        partial(objective, x_train=x_train, y_train=y_train),
         n_trials=100,
         timeout=60 * 60 * 8,
     )

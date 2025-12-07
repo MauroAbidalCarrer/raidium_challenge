@@ -24,15 +24,21 @@ class DatasetConfig:
     ])
 
 @dataclass
+class OptimizerConfig:
+    starting_lr: float = 5e-4
+    beta0: float = 0.9
+    beta1: float = 0.999
+
+@dataclass
 class TrainingConfig:
     batch_size: int = 128
     n_epochs: int = 600
-    starting_lr: float = 5e-4
     cross_entropy_loss_weight: float = 1
     dice_loss_weight: float = 2
     invariant_d_loss_weight: float = 1
     use_labels_weight: bool = True
     random_state: int = 0
+    optim_cfg: OptimizerConfig=field(default_factory=OptimizerConfig)
 
 @dataclass
 class ModelConfig:

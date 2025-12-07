@@ -32,12 +32,13 @@ if __name__ == '__main__':
     assert batch_size % load_batch_size == 0
     steps_per_update = batch_size // load_batch_size
 
-    transform = Compose([Normalize(0.5, 0.5)])
+    #transform = Compose([Normalize(0.5, 0.5)])
     train_dataset = torchvision.datasets.CIFAR10('data', train=True, download=True, transform=ToTensor())
     val_dataset = torchvision.datasets.CIFAR10('data', train=False, download=True, transform=ToTensor())
     dataloader = torch.utils.data.DataLoader(train_dataset, load_batch_size, shuffle=True, num_workers=4)
     # writer = SummaryWriter(os.path.join('logs', 'cifar10', 'mae-pretrain'))
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device_type = torch.device(device).type
 
     model = MAE_ViT(mask_ratio=args.mask_ratio).to(device)
     optim = torch.optim.AdamW(model.parameters(), lr=args.base_learning_rate * args.batch_size / 256, betas=(0.9, 0.95), weight_decay=args.weight_decay)
@@ -51,9 +52,10 @@ if __name__ == '__main__':
         losses = []
         for img, label in tqdm(iter(dataloader)):
             step_count += 1
-            img = transform(img.to(device))
-            predicted_img, mask = model(img)
-            loss = torch.mean((predicted_img - img) ** 2 * mask) / args.mask_ratio
+            img = (img.to(device) - 0.5) / 0.5
+            with torch.autocast(device_type, torch.bfloat16):
+                predicted_img, mask = model(img)
+                loss = torch.mean((predicted_img - img) ** 2 * mask) / args.mask_ratio
             loss.backward()
             if step_count % steps_per_update == 0:
                 optim.step()

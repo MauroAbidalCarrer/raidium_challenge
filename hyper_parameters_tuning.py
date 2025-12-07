@@ -12,12 +12,13 @@ from src.training import train_model
 from src.metrics import SegmentationLoss
 from src import dataset
 from src.dataset import load_preprocessed_dataset
-from src.configs import TrainingConfig, ModelConfig, DatasetConfig
+from src.configs import TrainingConfig, ModelConfig, DatasetConfig, OptimizerConfig
 
 
 def main():
     model_cfg = ModelConfig()
-    dataset_cfg = DatasetConfig(test_size=0.1)
+    dataset_cfg = DatasetConfig()
+    train_cfg = TrainingConfig(n_epochs=75)
 
     dataset.mk_dataset(verbose=False)
     x_train, y_train, x_test = load_preprocessed_dataset()
@@ -25,9 +26,10 @@ def main():
     france_date = datetime.now(timezone('Europe/Paris'))
     hp_tuning_group = "start_lr+beta1_hp_" + france_date.strftime("%y-%m-%d:%H%M")
     def objective(trial: optuna.trial.Trial, x_train, y_train) -> float:
-        train_cfg = TrainingConfig(
-            starting_lr=trial.suggest_float("starting_lr", low=1e-5, high=1e-2),
-            n_epochs=50,
+        train_cfg.optim_cfg = OptimizerConfig(
+            trial.suggest_float("starting_lr", low=1e-5, high=1e-2),
+            trial.suggest_float("beta0", low=0.85, high=0.99),
+            trial.suggest_float("beta1", low=0.9, high=0.999),
         )
         model = torch.compile(mk_model(train_cfg, model_cfg))
         criterion = SegmentationLoss(train_cfg)

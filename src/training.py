@@ -11,15 +11,13 @@ from typing import (
 import torch
 import wandb
 import numpy as np
-import pandas as pd
 from torch import nn, Tensor
-from monai.metrics import DiceMetric
 from torchvision.tv_tensors import Mask
 from torch.utils.data import DataLoader
 
 from src.metrics import dice_pandas
 from src.timing import time_to_run, print_time_dict
-from src.configs import TrainingConfig, DatasetConfig, N_CLASSES, DEVICE
+from src.configs import TrainingConfig, DatasetConfig, OptimizerConfig, DEVICE
 
 
 # Pro tip: Never fix warnings causes
@@ -42,8 +40,8 @@ def train_model(
     wandb_init(train_cfg, dataset_cfg, model, hp_tuning_group)
     torch.backends.cuda.matmul.fp32_precision = 'ieee'
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=train_cfg.starting_lr)
     model = model.to(DEVICE)
+    optimizer = mk_optimizer(model, train_cfg.optim_cfg)
     step = 0
     training_samples_seen = 0
     valid_dice_score = None
@@ -169,3 +167,10 @@ def evaluate_model(
             step=step,
         )
     return dice_score
+
+def mk_optimizer(model: nn.Module, opti_cfg: OptimizerConfig) -> torch.optim.Optimizer:
+    return torch.optim.Adam(
+        model.parameters(),
+        lr=opti_cfg.starting_lr,
+        betas=(opti_cfg.beta0, opti_cfg.beta1)
+    )

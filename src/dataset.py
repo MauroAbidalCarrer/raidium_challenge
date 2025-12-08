@@ -51,6 +51,20 @@ def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
 
     return x_train, y_train, x_test
 
+MEAN: float = 14.0816
+STD: float = 35.2164
+
+def preprocess_imgs(x: Tensor) -> Tensor:
+    """
+    Processes an image to feed it to a model.
+    
+    :param x: raw image(s)
+    :type x: Tensor
+    :return: normalized image(s) in float32 on device.
+    :rtype: Tensor
+    """
+    return (x.to(device=DEVICE, dtype=torch.float) - MEAN) / STD
+
 def load_raw_dataset() -> tuple[Tensor, Tensor, Tensor]:
     y_train: Tensor = torch.load("dataset/formatted/y-train.pt")
     x_train = torch.load("dataset/formatted/x-train.pt").type(torch.float32)

@@ -32,15 +32,6 @@ def get_data_loaders(
 
     return train_loader, valid_loader
 
-def mk_ssl_data_loader(train_cfg: TrainingConfig) -> DataLoader:
-    x_train, y_train, x_test = load_raw_dataset()
-    train_tensor = torch.cat((x_train, x_test)).to(device="cuda")
-    train_ds = TensorDataset(train_tensor)
-    return DataLoader(
-        train_ds,
-        train_cfg.batch_size,
-        shuffle=True,
-    )
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """

@@ -87,6 +87,7 @@ def wandb_init(
             **vars(train_cfg),
             **(vars(dataset_cfg)),
             **(vars(model.cfg) if hasattr(model, "cfg") else {}),
+            "model_class": type(model).__class__,
         },
         tags= ["hp_tuning"] if hp_tuning_group is not None else None,
         group=hp_tuning_group,

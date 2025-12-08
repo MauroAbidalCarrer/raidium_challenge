@@ -6,27 +6,14 @@ ideas:
     - Use float/int8 convolution ? that would be dope
 - make dice score run on pytorch?
 - asynchronize train/evaluate?
+- Use swinVIT
+- Use float32 all the way
+- use blur and gaussian noise for data aug
 
 todo:
-- make training more data efficient, try to get the same (or a better) score with ~30 epochs
-    - self supervised learning
-- hyper parameter tuning with optuna
 - save checkpoint as artifact on wandb
-- Fewer epochs per training runs 
-- parrallel training run multiple processes on the same GPU?
-- Get to top 1 with unet and (run training while eating)?
-    - retrain on full set (train+valid), not just train set
-    - use TTA
-- self supervised learning:
-    - patch prediction?
-    - simCLR?
-    - teacher/student? (probably later)
-- understand why/fix the fact that higher batch sizes breaks training
-    - Could it be because we are using instance norm? maybe switch to batch norm?
-- stratify train test split
-- use lr scheduler?
-- fine tune foundation model
-- Use ensemble?
+- save images on wandb
+- train segmentation decoder
 
 - make the repo veeeeeeeery clean, so I can flex it to everyone
     - create a second repo and delete this one?

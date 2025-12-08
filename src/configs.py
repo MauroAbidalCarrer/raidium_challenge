@@ -6,6 +6,9 @@ from torchvision.transforms import v2
 
 
 N_CLASSES = 55
+PIXEL_VALUE_CHANNEL_IDX = N_CLASSES
+# The extra channel is for pixel value during ssl
+N_MODEL_OUT_CHANNELS = N_CLASSES + 1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @dataclass
@@ -39,6 +42,11 @@ class TrainingConfig:
     use_labels_weight: bool = True
     random_state: int = 0
     optim_cfg: OptimizerConfig=field(default_factory=OptimizerConfig)
+
+@dataclass
+class WandbConfig:
+    tags: list[str]
+    group: str
 
 @dataclass
 class ModelConfig:

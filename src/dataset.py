@@ -32,6 +32,16 @@ def get_data_loaders(
 
     return train_loader, valid_loader
 
+def mk_ssl_data_loader(train_cfg: TrainingConfig) -> DataLoader:
+    x_train, y_train, x_test = load_raw_dataset()
+    train_tensor = torch.cat((x_train, x_test)).to(device="cuda")
+    train_ds = TensorDataset(train_tensor)
+    return DataLoader(
+        train_ds,
+        train_cfg.batch_size,
+        shuffle=True,
+    )
+
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """
     - Loads formatted dataset 
@@ -42,15 +52,33 @@ def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     Returns:
         tuple[Tensor, Tensor, Tensor]: x_train, y_train, x_test
     """
-    y_train: Tensor = torch.load("dataset/formatted/y-train.pt")
-    x_train = torch.load("dataset/formatted/x-train.pt").type(torch.float32)
-    x_test = torch.load("dataset/formatted/x-test.pt").type(torch.float32)
+    y_train, x_train, x_test = load_raw_dataset()
     x_train_n_test = torch.cat((x_train, x_test))
     mean, std = x_train_n_test.mean(), x_train_n_test.std()
     x_train = (x_train - mean) / (std + 1e-8)
     x_test = (x_test - mean) / (std + 1e-8)
     x_train, y_train = remove_samples_without_labels(x_train, y_train)
 
+    return x_train, y_train, x_test
+
+MEAN: float = 14.0816
+STD: float = 35.2164
+
+def preprocess_imgs(x: Tensor) -> Tensor:
+    """
+    Processes an image to feed it to a model.
+    
+    :param x: raw image(s)
+    :type x: Tensor
+    :return: normalized image(s) in float32 on device.
+    :rtype: Tensor
+    """
+    return (x.to(device=DEVICE, dtype=torch.float) - MEAN) / STD
+
+def load_raw_dataset() -> tuple[Tensor, Tensor, Tensor]:
+    y_train: Tensor = torch.load("dataset/formatted/y-train.pt")
+    x_train = torch.load("dataset/formatted/x-train.pt").type(torch.float32)
+    x_test = torch.load("dataset/formatted/x-test.pt").type(torch.float32)
     return x_train, y_train, x_test
 
 def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Tensor, Tensor]:
@@ -100,14 +128,11 @@ def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
         key=lambda filename: int(filename.name.rstrip(".png"))
     ))
     imgs = torch.empty(
-        len(imsge_files),
-        1,
-        256,
-        256,
+        len(imsge_files), 1, 256, 256, 
         dtype=torch.uint8,
     )
     for img_idx, image_file in enumerate(imsge_files):
-        imgs[img_idx, 0] = torchvision.io.decode_image(image_file)[0]
+        imgs[img_idx] = torchvision.io.decode_image(image_file)
     return imgs
 
 def download_raw_dataset():

@@ -1,10 +1,12 @@
 import math
 from tqdm import tqdm
 from typing import Any
+from collections import defaultdict
 
 import torch
 import wandb
 from torch import nn, Tensor
+import torch.nn.functional as F
 from torch.optim import Optimizer, AdamW
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
@@ -15,29 +17,59 @@ from src import configs as cfg
 from src import dataset, metrics
 from mae.utils import setup_seed
 
-# Add segmentation loss
-# Add images
-# Submit
-# Add checkpoints
+# TODO:
+# - Add segmentation loss
+# - Add images
+# - Add checkpoints
+# - Add evaluation
+# - Add submission
+# - Submit
+# - Switch to one cycle lr
 
 def main():
-    max_lr=1e-3
-    mask_ratio=0.75
-
-    train_cfg = cfg.TrainingConfig(
-        n_epochs=5000,
-        batch_size=64,
-    )
-
+    # system setup
     dataset.mk_dataset(verbose=False)
     setup_seed(train_cfg.random_state)
     torch.backends.cuda.matmul.fp32_precision = 'ieee'
+    # setup configs
+    train_cfg = cfg.TrainingConfig(
+        max_lr=1e-3,
+        n_epochs=5000,
+        batch_size=64,
+    )
+    model_cfg = cfg.ModelConfig(compile=True)
+    # setup objects (no I didn't count the configs as objects...)
+    model = mk_model(model_cfg)
+    train_loader, valid_loader = mk_semi_supervised_data_loaders(train_cfg)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        # TODO: Understand the scaling of the max_lr
+        lr=train_cfg.max_lr,
+        betas=(0.9, 0.95),
+    )
+    lr_scheduler = mk_lr_scheduler(train_cfg, optimizer)
+    criterion = SemiSupervisedLoss(train_cfg, model_cfg.mask_ratio)
+    # Initilaze weights and biases run
+    wandb_init(
+        model,
+        cfg.WandbConfig(["pretraining", "MAE"], "pretraining"),
+        model_cfg,
+        train_cfg,
+    )
+    # start training
+    train_model(
+        model,
+        train_cfg,
+        optimizer,
+        lr_scheduler,
+        train_loader,
+        criterion,
+    )
 
-    train_loader = dataset.mk_ssl_data_loader(train_cfg)
-
+def mk_model(model_cfg: cfg.ModelConfig) -> nn.Module:
     model = MAE_ViT(
         image_size=256,
-        mask_ratio=mask_ratio,
+        mask_ratio=model_cfg.mask_ratio,
         patch_size=16,
         emb_dim=256,
         encoder_layer=8,
@@ -45,46 +77,20 @@ def main():
         decoder_head=8,
         out_channels=cfg.N_CLASSES + 1,
     ).to(cfg.DEVICE)
-    model_cfg = cfg.ModelConfig()
-    model_cfg.mask_ratio = 0.75
     model.cfg = model_cfg
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=max_lr * train_cfg.batch_size / 256,
-        betas=(0.9, 0.95),
-    )
+    if compile:
+        model = torch.compile(model)
+    return model
+
+def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:
     def lr_func(epoch: int) -> float:
         return min(
             (epoch + 1) / (train_cfg.n_epochs // 10 + 1e-8),
             0.5 * (math.cos(epoch / train_cfg.n_epochs * math.pi) + 1)
         )
-    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_func)
-    train_model(
-        model,
-        train_cfg,
-        optimizer,
-        lr_scheduler,
-        train_loader,
-        cfg.WandbConfig(["pretraining", "MAE"], "pretraining"),
-    )
+    return LambdaLR(optimizer, lr_lambda=lr_func)
 
-def train_model(
-        model: torch.nn.Module,
-        train_cfg: cfg.TrainingConfig,
-        optimizer: torch.optim.Optimizer,
-        lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
-        train_loader: DataLoader,
-        wandb_cfg: cfg.WandbConfig,
-    ) -> dict[str, Tensor]:
-    wandb_init(model, wandb_cfg, train_cfg)
-    for epoch in tqdm(range(train_cfg.n_epochs)):
-        epoch_dict = train_model_for_single_epoch(model, optimizer, lr_scheduler, train_loader)
-        wandb.log(
-            data={"training/" + k: v.item() for k, v in epoch_dict.items()},
-            step=epoch,
-        )
-
-def mk_data_loaders(train_cfg: cfg.TrainingConfig) -> tuple[DataLoader, DataLoader]:
+def mk_semi_supervised_data_loaders(train_cfg: cfg.TrainingConfig) -> tuple[DataLoader, DataLoader]:
     x_train, y_train, x_test = dataset.load_raw_dataset()
     x_train, y_train, x_valid, y_valid = train_test_split(
         x_train,
@@ -119,48 +125,115 @@ def wandb_init(
         **vars(wandb_cfg),
     )
 
+def train_model(
+        model: torch.nn.Module,
+        train_cfg: cfg.TrainingConfig,
+        optimizer: torch.optim.Optimizer,
+        lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+        train_loader: DataLoader,
+        criterion: cfg.criterion_t,
+    ) -> dict[str, Tensor]:
+    for epoch in tqdm(range(train_cfg.n_epochs)):
+        epoch_dict = train_model_for_single_epoch(
+            model,
+            optimizer,
+            lr_scheduler,
+            train_loader,
+            criterion,
+        )
+        wandb.log(
+            data={"training/" + k: v.item() for k, v in epoch_dict.items()},
+            step=epoch,
+        )
+
 def train_model_for_single_epoch(
         model: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
         train_loader: torch.utils.data.DataLoader,
+        criterion: cfg.criterion_t,
     ) -> dict[str, Tensor]:
     model.train()
-    losses = []
-    for (x,) in train_loader:
+    epochs_steps_dicts = defaultdict(list)
+    for (x, y_true) in train_loader:
         x = dataset.preprocess_imgs(x)
-        step_dict = perform_training_step(model, x, optimizer)
-        losses.append(step_dict["loss"])
+        step_dict = perform_training_step(
+            model,
+            x,
+            y_true,
+            optimizer,
+            criterion,
+        )
+        for k, v in step_dict.items():
+            epochs_steps_dicts[k].append(v.detach())
+    # TODO: Check if this shouldn't get called per step instead of per epoch.
     lr_scheduler.step()
-    avg_loss = sum(losses) / len(losses)
-    return {"loss": avg_loss}
+    epoch_dict = {k: torch.cat(v).mean().item() for k, v in epochs_steps_dicts.items()}
+    return epoch_dict
 
 def perform_training_step(
         model: torch.nn.Module,
         x: Tensor,
         y_true: Tensor,
-        otpimizer: torch.optim.Optimizer
+        otpimizer: torch.optim.Optimizer,
+        criterion: cfg.criterion_t,
     ) -> dict[str, Tensor]:
     otpimizer.zero_grad()
     with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
         predicted_img, mask = model(x)
-        loss_dict = criterion(x, predicted_img, mask, y_true, model)
+        loss_dict = criterion(x, predicted_img, mask, y_true)
     loss_dict["loss"].backward()
-    loss_norm = torch.optim.
+    loss_norm = torch.nn.utils.clip_grad_norm(
+        model.parameters(),
+        1.0, # TODO: Hypertune this
+    )
     otpimizer.step()
-    return {"loss": loss}
+    return {**loss_dict, "loss_norm": loss_norm}
 
-def criterion(
-        x: Tensor,
-        x_hat: Tensor,
-        mask: Tensor,
-        y_true: Tensor,
-        model: nn.Module
-    ) -> dict[str, Tensor]:
-    reconstruction_loss = torch.mean((predicted_img - x) ** 2 * mask) / model.cfg.mask_ratio
-    return {
-        "reconstruction_loss": reconstruction_loss
-    }
+class SemiSupervisedLoss:
+    """
+    Computes a weighted average of mse loss of the images reconstruction, dice score and cross entropy.
+    """
+    def __init__(self, train_cfg: cfg.TrainingConfig):
+        weight = metrics.get_class_weights().to(cfg.DEVICE)
+        self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=weight)
+        self.train_cfg = train_cfg
+
+    def __call__(
+            self,
+            x: Tensor,
+            x_hat: Tensor,
+            mask: Tensor,
+            y_true: Tensor,
+        ) -> dict[str, Tensor]:
+        # reconstruction loss
+        pix_wise_rec_loss = F.mse_loss(x[:, 0], x, reduction=None)
+        pix_wise_rec_loss = pix_wise_rec_loss * mask / self.train_cfg.mask_ratio
+        rec_loss = pix_wise_rec_loss.mean()
+        # Segmentation losses mask, not all the samples may have a corresponding mask.
+        seg_loss_mask = torch.is_nonzero(y_true.flatten(1)).any(dim=1)
+        # Cross entropy loss
+        y_pred = x_hat[:, 1:]
+        y_true = y_true.long()
+        ce_loss = self.cross_entropy_loss(
+            y_pred[seg_loss_mask],
+            y_true[seg_loss_mask],
+        )
+        # Dice loss
+        base_d_loss = metrics.torch_dice_loss(
+            y_pred[seg_loss_mask],
+            y_true[seg_loss_mask],
+        )
+        # Weighted average
+        loss = base_d_loss * self.train_cfg.dice_loss_weight          \
+             + ce_loss     * self.train_cfg.cross_entropy_loss_weight \
+             + rec_loss    * self.train_cfg.rec_loss_weight
+        return loss, {
+            "loss": loss,
+            "cross_entropy_loss": ce_loss,
+            "dice_loss": base_d_loss,
+            "rec_loss": rec_loss,
+        }
 
 def reconstruct_img(predicted_img: Tensor, mask: Tensor, x: Tensor) -> Tensor:
     return predicted_img * mask + x * (1 - mask)

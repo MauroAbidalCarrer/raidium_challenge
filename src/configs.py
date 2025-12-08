@@ -44,6 +44,11 @@ class TrainingConfig:
     optim_cfg: OptimizerConfig=field(default_factory=OptimizerConfig)
 
 @dataclass
+class WandbConfig:
+    tags: list[str]
+    group: str
+
+@dataclass
 class ModelConfig:
     channels: Sequence[int] = field(default_factory=lambda: (64, 128, 256, 512))
     strides: Sequence[int] = field(default_factory=lambda: (2, 2, 2))

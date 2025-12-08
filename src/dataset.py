@@ -69,7 +69,7 @@ def load_raw_dataset() -> tuple[Tensor, Tensor, Tensor]:
     y_train: Tensor = torch.load("dataset/formatted/y-train.pt")
     x_train = torch.load("dataset/formatted/x-train.pt").type(torch.float32)
     x_test = torch.load("dataset/formatted/x-test.pt").type(torch.float32)
-    return y_train, x_train, x_test
+    return x_train, y_train, x_test
 
 def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Tensor, Tensor]:
     has_labels_mask = y_train.amax((1, 2)) != y_train.amin((1, 2))
@@ -118,14 +118,11 @@ def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
         key=lambda filename: int(filename.name.rstrip(".png"))
     ))
     imgs = torch.empty(
-        len(imsge_files),
-        1,
-        256,
-        256,
+        len(imsge_files), 1, 256, 256, 
         dtype=torch.uint8,
     )
     for img_idx, image_file in enumerate(imsge_files):
-        imgs[img_idx, 0] = torchvision.io.decode_image(image_file)[0]
+        imgs[img_idx] = torchvision.io.decode_image(image_file)
     return imgs
 
 def download_raw_dataset():

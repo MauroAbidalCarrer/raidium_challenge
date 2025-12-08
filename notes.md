@@ -6,6 +6,7 @@ ideas:
     - Use float/int8 convolution ? that would be dope
 - make dice score run on pytorch?
 - asynchronize train/evaluate?
+- Use swinVIT
 
 todo:
 - make training more data efficient, try to get the same (or a better) score with ~30 epochs

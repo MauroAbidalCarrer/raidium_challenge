@@ -5,8 +5,11 @@ from collections import defaultdict
 
 import torch
 import wandb
+import numpy as np
+import torchvision
 from torch import nn, Tensor
 import torch.nn.functional as F
+from torchvision.utils import make_grid
 from torch.optim import Optimizer, AdamW
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
@@ -194,6 +197,9 @@ def perform_training_step(
         1.0, # TODO: Hypertune this
     )
     otpimizer.step()
+    wandb_log_images_as_table(x, mask, predicted_img, y_true)
+    wandb.finish()
+    exit(0)
     return {**loss_dict, "loss_norm": loss_norm}
 
 class SemiSupervisedLoss:
@@ -216,6 +222,7 @@ class SemiSupervisedLoss:
         pix_wise_rec_loss = F.mse_loss(x_hat[:, 0], x[:, 0], reduction="none")
         pix_wise_rec_loss = pix_wise_rec_loss * mask[:, 0] / self.train_cfg.mask_ratio
         rec_loss = pix_wise_rec_loss.mean()
+        # Create labeled samples mask to compute seg loss only on them
         seg_loss_mask = (y_true.flatten(1) != 0 ).any(dim=1)
         # Cross entropy loss
         y_pred = x_hat[:, 1:]
@@ -239,6 +246,48 @@ class SemiSupervisedLoss:
             "dice_loss": base_d_loss,
             "rec_loss": rec_loss,
         }
+
+def wandb_log_images_as_table(
+        og_img: Tensor,
+        patch_mask: Tensor,
+        predicted_img: Tensor,
+        seg_y_true: Tensor,
+        n_imgs_to_log: int=10,
+    ):
+    seg_loss_mask = (seg_y_true.flatten(1) != 0 ).any(dim=1)
+    patch_mask = patch_mask[seg_loss_mask][:, :1]
+    og_img = og_img[seg_loss_mask]
+    predicted_img = predicted_img[seg_loss_mask][:, :1]
+    predicted_img =  predicted_img * patch_mask + og_img * (1 - patch_mask)
+    predicted_seg = predicted_img.argmax(dim=1)
+    seg_y_true = seg_y_true[seg_loss_mask]
+    masked_img = og_img * (1 - patch_mask)
+    # move to cpu
+    mv_tensor_to_np = lambda t: t.detach().float().cpu()[:n_imgs_to_log]
+    # images
+    og_img: Tensor = mv_tensor_to_np(og_img)
+    predicted_img = mv_tensor_to_np(predicted_img)
+    masked_img = mv_tensor_to_np(masked_img)
+    # segmentations
+    predicted_seg = mv_tensor_to_np(predicted_seg)
+    seg_y_true = mv_tensor_to_np(seg_y_true)
+    # Convert to wandb images
+    def float_img_to_uint8(img: Tensor) -> Tensor:
+        return (img - img.amin()) / (img.amax() - img.amin()) 
+    def upload_and_save_image(imgs: Tensor, pth: str):
+        torchvision.utils.save_image(float_img_to_uint8(imgs), pth)
+        wandb.log(
+            data={pth[:-4]: wandb.Image(pth)},
+            commit=True,
+        )
+    upload_and_save_image(masked_img, "masked_img.png")
+    print(predicted_img.shape)
+    upload_and_save_image(predicted_img, "predicted_img.png")
+    upload_and_save_image(og_img, "og_img.png")
+
+    print("masked_img:", masked_img.shape)
+    print("predicted_img:", predicted_img.shape)
+    
 
 
 def reconstruct_img(predicted_img: Tensor, mask: Tensor, x: Tensor) -> Tensor:

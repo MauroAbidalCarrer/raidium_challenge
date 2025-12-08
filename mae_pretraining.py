@@ -20,6 +20,7 @@ from mae.utils import setup_seed
 # TODO:
 # - Add segmentation loss
 # - Add images
+# - Add back training samples seen
 # - Add checkpoints
 # - Add evaluation
 # - Add submission
@@ -238,6 +239,7 @@ class SemiSupervisedLoss:
             "dice_loss": base_d_loss,
             "rec_loss": rec_loss,
         }
+
 
 def reconstruct_img(predicted_img: Tensor, mask: Tensor, x: Tensor) -> Tensor:
     return predicted_img * mask + x * (1 - mask)

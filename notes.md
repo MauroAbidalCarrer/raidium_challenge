@@ -2,19 +2,20 @@ Documentation
     - felzenszwalb
 
 ideas:
-- find some way of loss normalization?
+- optimization:
     - Use float/int8 convolution ? that would be dope
-- make dice score run on pytorch?
-- asynchronize train/evaluate?
-- Use swinVIT
-- Use float32 all the way
-- use blur and gaussian noise for data aug
+    - make dice score run on pytorch?
+- model performance:
+    - find some way of loss normalization?
+    - Use swinVIT
+    - Use float32 all the way
+    - use blur and gaussian noise for data aug
 
 todo:
-- save checkpoint as artifact on wandb
 - save images on wandb
-- train segmentation decoder
+- save checkpoint as artifact on wandb
 
+at the end of the competion:
 - make the repo veeeeeeeery clean, so I can flex it to everyone
     - create a second repo and delete this one?
     - Try to use monai loss/metrics when possible to reduce code base size.

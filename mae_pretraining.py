@@ -29,7 +29,6 @@ from mae.utils import setup_seed
 def main():
     # system setup
     dataset.mk_dataset(verbose=False)
-    setup_seed(train_cfg.random_state)
     torch.backends.cuda.matmul.fp32_precision = 'ieee'
     # setup configs
     train_cfg = cfg.TrainingConfig(
@@ -37,9 +36,10 @@ def main():
         n_epochs=5000,
         batch_size=64,
     )
-    model_cfg = cfg.ModelConfig(compile=True)
+    setup_seed(train_cfg.random_state)
+    model_cfg = cfg.ModelConfig(compile=False)
     # setup objects (no I didn't count the configs as objects...)
-    model = mk_model(model_cfg)
+    model = mk_model(model_cfg, train_cfg)
     train_loader, valid_loader = mk_semi_supervised_data_loaders(train_cfg)
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -48,7 +48,7 @@ def main():
         betas=(0.9, 0.95),
     )
     lr_scheduler = mk_lr_scheduler(train_cfg, optimizer)
-    criterion = SemiSupervisedLoss(train_cfg, model_cfg.mask_ratio)
+    criterion = SemiSupervisedLoss(train_cfg)
     # Initilaze weights and biases run
     wandb_init(
         model,
@@ -66,10 +66,10 @@ def main():
         criterion,
     )
 
-def mk_model(model_cfg: cfg.ModelConfig) -> nn.Module:
+def mk_model(model_cfg: cfg.ModelConfig, training_cfg: cfg.TrainingConfig) -> nn.Module:
     model = MAE_ViT(
         image_size=256,
-        mask_ratio=model_cfg.mask_ratio,
+        mask_ratio=training_cfg.mask_ratio,
         patch_size=16,
         emb_dim=256,
         encoder_layer=8,
@@ -78,8 +78,6 @@ def mk_model(model_cfg: cfg.ModelConfig) -> nn.Module:
         out_channels=cfg.N_CLASSES + 1,
     ).to(cfg.DEVICE)
     model.cfg = model_cfg
-    if compile:
-        model = torch.compile(model)
     return model
 
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:
@@ -91,20 +89,25 @@ def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRSc
     return LambdaLR(optimizer, lr_lambda=lr_func)
 
 def mk_semi_supervised_data_loaders(train_cfg: cfg.TrainingConfig) -> tuple[DataLoader, DataLoader]:
-    x_train, y_train, x_test = dataset.load_raw_dataset()
-    x_train, y_train, x_valid, y_valid = train_test_split(
+    x_train, y_train, x_test = dataset.load_raw_dataset(cfg.DEVICE)
+    if not all(map(lambda t: t.dtype == torch.uint8, (x_train, x_test, y_train))):
+        raise ValueError("Not all raw tensors are of dtype uint8.")
+    x_train, x_valid, y_train, y_valid = train_test_split(
         x_train,
         y_train,
         test_size=train_cfg.test_size,
     )
     x_train = torch.cat((x_train, x_test))
-    y_train = torch.cat((
-        y_train,
-        torch.zeros(x_test.shape[0], 256, 256, dtype=torch.unit8),
-    ))
+    y_train_fill = torch.zeros(
+        x_test.shape[0], 256, 256,
+        dtype=torch.uint8,
+        device=y_train.device,
+    )
+
+    y_train = torch.cat((y_train, y_train_fill))
     train_dataset = TensorDataset(x_train, y_train)
     valid_dataset = TensorDataset(x_valid, y_valid)
-    train_loader = DataLoader(train_dataset, train_cfg.batch_size)
+    train_loader = DataLoader(train_dataset, train_cfg.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, train_cfg.batch_size)
     return train_loader, valid_loader
 
@@ -142,7 +145,7 @@ def train_model(
             criterion,
         )
         wandb.log(
-            data={"training/" + k: v.item() for k, v in epoch_dict.items()},
+            data={"training/" + k: v for k, v in epoch_dict.items()},
             step=epoch,
         )
 
@@ -154,8 +157,10 @@ def train_model_for_single_epoch(
         criterion: cfg.criterion_t,
     ) -> dict[str, Tensor]:
     model.train()
-    epochs_steps_dicts = defaultdict(list)
-    for (x, y_true) in train_loader:
+    n_batches = len(train_loader)
+    mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
+    epochs_steps_dicts: dict[str, Tensor] = defaultdict(mk_epoch_buff)
+    for batch_i, (x, y_true) in enumerate(train_loader):
         x = dataset.preprocess_imgs(x)
         step_dict = perform_training_step(
             model,
@@ -165,10 +170,10 @@ def train_model_for_single_epoch(
             criterion,
         )
         for k, v in step_dict.items():
-            epochs_steps_dicts[k].append(v.detach())
+            epochs_steps_dicts[k][batch_i] = v.detach()
     # TODO: Check if this shouldn't get called per step instead of per epoch.
     lr_scheduler.step()
-    epoch_dict = {k: torch.cat(v).mean().item() for k, v in epochs_steps_dicts.items()}
+    epoch_dict = {k: v.mean().item() for k, v in epochs_steps_dicts.items()}
     return epoch_dict
 
 def perform_training_step(
@@ -183,7 +188,7 @@ def perform_training_step(
         predicted_img, mask = model(x)
         loss_dict = criterion(x, predicted_img, mask, y_true)
     loss_dict["loss"].backward()
-    loss_norm = torch.nn.utils.clip_grad_norm(
+    loss_norm = torch.nn.utils.clip_grad_norm_(
         model.parameters(),
         1.0, # TODO: Hypertune this
     )
@@ -207,11 +212,10 @@ class SemiSupervisedLoss:
             y_true: Tensor,
         ) -> dict[str, Tensor]:
         # reconstruction loss
-        pix_wise_rec_loss = F.mse_loss(x[:, 0], x, reduction=None)
-        pix_wise_rec_loss = pix_wise_rec_loss * mask / self.train_cfg.mask_ratio
+        pix_wise_rec_loss = F.mse_loss(x_hat[:, 0], x[:, 0], reduction="none")
+        pix_wise_rec_loss = pix_wise_rec_loss * mask[:, 0] / self.train_cfg.mask_ratio
         rec_loss = pix_wise_rec_loss.mean()
-        # Segmentation losses mask, not all the samples may have a corresponding mask.
-        seg_loss_mask = torch.is_nonzero(y_true.flatten(1)).any(dim=1)
+        seg_loss_mask = (y_true.flatten(1) != 0 ).any(dim=1)
         # Cross entropy loss
         y_pred = x_hat[:, 1:]
         y_true = y_true.long()
@@ -228,7 +232,7 @@ class SemiSupervisedLoss:
         loss = base_d_loss * self.train_cfg.dice_loss_weight          \
              + ce_loss     * self.train_cfg.cross_entropy_loss_weight \
              + rec_loss    * self.train_cfg.rec_loss_weight
-        return loss, {
+        return {
             "loss": loss,
             "cross_entropy_loss": ce_loss,
             "dice_loss": base_d_loss,

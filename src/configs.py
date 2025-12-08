@@ -1,7 +1,14 @@
+from typing import (
+    Optional,
+    Callable,
+    Dict,
+    Tuple,
+)
 from typing import Sequence
 from dataclasses import dataclass, field
 
 import torch
+from torch import Tensor
 from torchvision.transforms import v2
 
 
@@ -10,10 +17,10 @@ PIXEL_VALUE_CHANNEL_IDX = N_CLASSES
 # The extra channel is for pixel value during ssl
 N_MODEL_OUT_CHANNELS = N_CLASSES + 1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+criterion_t = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
 
 @dataclass
 class DatasetConfig:
-    test_size: float = 0.02
     transform: v2.Transform = v2.Compose([
         v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
         v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
@@ -34,8 +41,10 @@ class OptimizerConfig:
 
 @dataclass
 class TrainingConfig:
-    batch_size: int = 128
     n_epochs: int = 600
+    batch_size: int = 128
+    test_size: float = 0.02
+    # losses
     cross_entropy_loss_weight: float = 1
     dice_loss_weight: float = 2
     rec_loss_weight: float = 1

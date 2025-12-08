@@ -112,6 +112,7 @@ def wandb_init(
         **vars(wandb_cfg),
     )
 
+@torch.compile
 def perform_training_step(model: torch.nn.Module, x: Tensor, otpimizer: torch.optim.Optimizer) -> dict[str, Tensor]:
     otpimizer.zero_grad()
     with torch.autocast(cfg.DEVICE.type, torch.bfloat16):

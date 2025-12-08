@@ -7,6 +7,8 @@ ideas:
 - make dice score run on pytorch?
 - asynchronize train/evaluate?
 - Use swinVIT
+- Use float32 all the way
+- use blur and gaussian noise for data aug
 
 todo:
 - save checkpoint as artifact on wandb

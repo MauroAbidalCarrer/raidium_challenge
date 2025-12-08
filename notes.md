@@ -9,33 +9,9 @@ ideas:
 - Use swinVIT
 
 todo:
-- make training more data efficient, try to get the same (or a better) score with ~30 epochs
-    - self supervised learning 
-        - ssl pretraining:
-            - Change output channels: 55 classes + 1 pixel value (maybe round to nearest power of two -> 64)
-            - for each batch: add patches of noise to the input and a mask of where the noise was added
-            - get model output, zero out image and model output where no noise was applied
-            - express loss as MSE between whatever channel we chose as the pixle channel (maybe the last one?)
-        - supervised learning finetuning: 
-            - freeze the encoder?
-            - train the model as usual on all but the pixel channel output
-- hyper parameter tuning with optuna
 - save checkpoint as artifact on wandb
-- Fewer epochs per training runs 
-- parrallel training run multiple processes on the same GPU?
-- Get to top 1 with unet and (run training while eating)?
-    - retrain on full set (train+valid), not just train set
-    - use TTA
-- self supervised learning:
-    - patch prediction?
-    - simCLR?
-    - teacher/student? (probably later)
-- understand why/fix the fact that higher batch sizes breaks training
-    - Could it be because we are using instance norm? maybe switch to batch norm?
-- stratify train test split
-- use lr scheduler?
-- fine tune foundation model
-- Use ensemble?
+- save images on wandb
+- train segmentation decoder
 
 - make the repo veeeeeeeery clean, so I can flex it to everyone
     - create a second repo and delete this one?

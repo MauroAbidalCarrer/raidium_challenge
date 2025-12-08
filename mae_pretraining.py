@@ -258,7 +258,7 @@ def wandb_log_images_as_table(
     patch_mask = patch_mask[seg_loss_mask][:, :1]
     og_img = og_img[seg_loss_mask]
     predicted_img = predicted_img[seg_loss_mask][:, :1]
-    predicted_img =  predicted_img * patch_mask + og_img * (1 - patch_mask)
+    predicted_img =  predicted_img * patch_mask +
     predicted_seg = predicted_img.argmax(dim=1)
     seg_y_true = seg_y_true[seg_loss_mask]
     masked_img = og_img * (1 - patch_mask)

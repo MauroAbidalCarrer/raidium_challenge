@@ -97,28 +97,30 @@ def perform_training_step(model: torch.nn.Module, x: Tensor, otpimizer: torch.op
     otpimizer.step()
     return {"loss": loss}
 
-@torch.no_grad
-def wadnb_log_model_images(
-        model: torch.nn.Module,
-        data_loader: torch.utils.data.DataLoader,
-        epoch: int,
-    ):
-    model.eval()
-    (x, ) = next(iter(data_loader))
-    x = dataset.preprocess_imgs(x)
-    N_IMGS_TO_PLT = 5
-    x = x[:N_IMGS_TO_PLT]
-    predicted_val_img, mask = model(x)
-    predicted_val_img = predicted_val_img * mask + x * (1 - mask)
-    img = torch.cat([x * (1 - mask), predicted_val_img, x], dim=0)
-    img = img * dataset.STD + dataset.MEAN 
-    np_imgs = (
-        img
-        .detach()
-        .cpu()
-        .numpy()
-        .squeeze()
-    )
+# @torch.no_grad
+# def wadnb_log_model_images(
+#         model: torch.nn.Module,
+#         data_loader: torch.utils.data.DataLoader,
+#         epoch: int,
+#     ):
+#     model.eval()
+#     (x, ) = next(iter(data_loader))
+#     x = dataset.preprocess_imgs(x)
+#     N_IMGS_TO_PLT = 3
+#     x = x[:N_IMGS_TO_PLT]
+#     predicted_val_img, mask = model(x)
+#     predicted_val_img = predicted_val_img * mask + x * (1 - mask)
+#     img = torch.cat([x * (1 - mask), predicted_val_img, x], dim=0)
+#     img = img * dataset.STD + dataset.MEAN 
+    # np_imgs = (
+    #     img
+    #     .detach()
+    #     .cpu()
+    #     .numpy()
+    #     .squeeze()
+    #     .reshape(3, N_IMGS_TO_PLT, 256, 256)
+    #     .swapaxes(0, 1)
+    # )
 
 if __name__ == "__main__":
     main()

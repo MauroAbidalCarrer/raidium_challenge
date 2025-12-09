@@ -355,28 +355,28 @@ class SemiSupervisedLoss:
         pix_wise_rec_loss = F.mse_loss(x_hat[:, 0], x[:, 0], reduction="none")
         pix_wise_rec_loss = pix_wise_rec_loss * mask[:, 0] / self.train_cfg.mask_ratio
         rec_loss = pix_wise_rec_loss.mean()
-        # Create labeled samples mask to compute seg loss only on them
-        seg_loss_mask = (y_true.flatten(1) != 0 ).any(dim=1)
-        # Cross entropy loss
-        y_pred = x_hat[:, 1:]
-        y_true = y_true.long()
-        ce_loss = self.cross_entropy_loss(
-            y_pred[seg_loss_mask],
-            y_true[seg_loss_mask],
-        )
-        # Dice loss
-        base_d_loss = metrics.torch_dice_loss(
-            y_pred[seg_loss_mask],
-            y_true[seg_loss_mask],
-        )
+        # # Create labeled samples mask to compute seg loss only on them
+        # seg_loss_mask = (y_true.flatten(1) != 0 ).any(dim=1)
+        # # Cross entropy loss
+        # y_pred = x_hat[:, 1:]
+        # y_true = y_true.long()
+        # ce_loss = self.cross_entropy_loss(
+        #     y_pred[seg_loss_mask],
+        #     y_true[seg_loss_mask],
+        # )
+        # # Dice loss
+        # base_d_loss = metrics.torch_dice_loss(
+        #     y_pred[seg_loss_mask],
+        #     y_true[seg_loss_mask],
+        # )
         # Weighted average
-        loss = base_d_loss * self.train_cfg.dice_loss_weight          \
-             + ce_loss     * self.train_cfg.cross_entropy_loss_weight 
+        # loss = base_d_loss * self.train_cfg.dice_loss_weight          \
+        #      + ce_loss     * self.train_cfg.cross_entropy_loss_weight 
             #  + rec_loss    * self.train_cfg.rec_loss_weight
         return {
             "loss": rec_loss,
-            "cross_entropy_loss": ce_loss,
-            "dice_loss": base_d_loss,
+            # "cross_entropy_loss": ce_loss,
+            # "dice_loss": base_d_loss,
             "rec_loss": rec_loss,
         }
 

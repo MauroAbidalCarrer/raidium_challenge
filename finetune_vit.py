@@ -36,7 +36,7 @@ def main():
     chkpt_pth = sys.argv[1]
     checkpt_dict = torch.load(chkpt_pth, weights_only=False)
     train_cfg = cfg.TrainingConfig(
-        n_epochs=300,
+        n_epochs=600,
         batch_size=64,
         test_size=0.1,
         mask_ratio=0,
@@ -45,6 +45,8 @@ def main():
     model_cfg = cfg.ModelConfig(**checkpt_dict["model_cfg"])
     model = models.MAE_ViT.from_config(model_cfg)
     model.load_state_dict(checkpt_dict["model"])
+    for param in model.encoder.parameters():
+        param.requires_grad = False
     criterion = metrics.SegmentationLoss(train_cfg)
     optimizer = training.mk_optimizer(model, train_cfg)
     lr_scheduler = OneCycleLR(
@@ -58,8 +60,13 @@ def main():
         train_cfg,
         optimizer,
         lr_scheduler,
+        cfg.WandbConfig(["finetuning", "MAE"], "finetuning")
     )
-    trainer.train_model(data_loaders, criterion)
+    trainer.train_model(
+        data_loaders,
+        criterion,
+        "checkpoints/finetuned/vit_epoch{epoch}.pt"
+    )
 
 def mk_data_loaders_for_finetuning(
         train_cfg: cfg.TrainingConfig

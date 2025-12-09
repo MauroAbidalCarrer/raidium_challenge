@@ -30,6 +30,7 @@ class Trainer:
             train_cfg: cfg.TrainingConfig,
             optimizer: torch.optim.Optimizer,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+            wandb_cfg: cfg.WandbConfig,
         ):
         if isinstance(model, nn.Module):
             self.model = model
@@ -45,7 +46,7 @@ class Trainer:
         # Initilaze weights and biases run
         wandb_init(
             self.model,
-            cfg.WandbConfig(["pretraining", "MAE"], "pretraining"),
+            wandb_cfg,
             self.model.cfg,
             train_cfg,
         )
@@ -68,6 +69,7 @@ class Trainer:
             self,
             data_loaders: dict[str, DataLoader],
             criterion: cfg.criterion_t,
+            chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
         self.training_samples_seen = 0
         for _ in tqdm(range(self.epoch, self.train_cfg.n_epochs)):
@@ -84,7 +86,7 @@ class Trainer:
                 self.save_checkpoint()
             self.epoch += 1
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, chkpt_pth_format: str):
         """Saves checkpoint on wandb and on the machine."""
         chkpt_dict = {
             "model": self.model.state_dict(),
@@ -96,7 +98,7 @@ class Trainer:
             "training_samples_seen": self.training_samples_seen
         }
         os.makedirs("checkpoints/", exist_ok=True)
-        pth = f"checkpoints/mae_vit_{self.epoch}_chkpt.pt"
+        pth = chkpt_pth_format.format(self.epoch)
         torch.save(chkpt_dict, pth)
         print("Saved checpoint at", pth)
 

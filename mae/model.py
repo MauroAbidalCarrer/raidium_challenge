@@ -1,12 +1,12 @@
 import torch
 import timm
 import numpy as np
-
 from einops import repeat, rearrange
 from einops.layers.torch import Rearrange
-
 from timm.models.layers import trunc_normal_
 from timm.models.vision_transformer import Block
+
+from src.timing import time_to_run
 
 def random_indexes(size : int):
     forward_indexes = np.arange(size)
@@ -83,7 +83,7 @@ class MAE_Encoder(torch.nn.Module):
         patches = patches + self.pos_embedding
 
         patches, forward_indexes, backward_indexes = self.shuffle(patches)
-
+        
         patches = torch.cat([self.cls_token.expand(-1, patches.shape[1], -1), patches], dim=0)
         patches = rearrange(patches, 't b c -> b t c')
         features = self.layer_norm(self.transformer(patches))
@@ -143,7 +143,7 @@ class MAE_ViT(torch.nn.Module):
             self,
             image_size=32,
             patch_size=2,
-            emb_dim=192,
+            emb_dim=256,
             encoder_layer=12,
             encoder_head=3,
             decoder_layer=4,
@@ -151,9 +151,9 @@ class MAE_ViT(torch.nn.Module):
             mask_ratio=0.75,
             in_channels=1,
             out_channels=1,
+            **_,
         ) -> None:
         super().__init__()
-
         self.encoder = MAE_Encoder(image_size, patch_size, emb_dim, encoder_layer, encoder_head, mask_ratio, in_channels)
         self.decoder = MAE_Decoder(image_size, patch_size, emb_dim, decoder_layer, decoder_head, out_channels)
 

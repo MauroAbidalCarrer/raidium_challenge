@@ -60,4 +60,7 @@ class WandbConfig:
 
 @dataclass
 class ModelConfig:
+    n_encoder_layers: int = 8
+    n_encoder_heads: int = 8
+    n_decoder_heads: int = 8
     compile: bool = True

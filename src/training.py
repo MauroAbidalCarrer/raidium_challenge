@@ -30,6 +30,7 @@ class Trainer:
             train_cfg: cfg.TrainingConfig,
             optimizer: torch.optim.Optimizer,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+            wandb_cfg: cfg.WandbConfig,
         ):
         if isinstance(model, nn.Module):
             self.model = model
@@ -45,7 +46,7 @@ class Trainer:
         # Initilaze weights and biases run
         wandb_init(
             self.model,
-            cfg.WandbConfig(["pretraining", "MAE"], "pretraining"),
+            wandb_cfg,
             self.model.cfg,
             train_cfg,
         )
@@ -68,8 +69,10 @@ class Trainer:
             self,
             data_loaders: dict[str, DataLoader],
             criterion: cfg.criterion_t,
+            chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
         self.training_samples_seen = 0
+        self.save_checkpoint(chkpt_pth_format)
         for _ in tqdm(range(self.epoch, self.train_cfg.n_epochs)):
             is_last_epoch = self.epoch == self.train_cfg.n_epochs - 1
             if self.epoch % 100 == 0 or is_last_epoch:
@@ -80,11 +83,10 @@ class Trainer:
             wandb_log_dict_with_prefix(training_dict, "training", self.epoch)
             if self.epoch % 10 == 0 or is_last_epoch:
                 timing.print_time_dict()
-            if (self.epoch % 100 == 0 and self.epoch != 0) or is_last_epoch:
-                self.save_checkpoint()
+            # if (self.epoch % 100 == 0 and self.epoch != 0) or is_last_epoch:
             self.epoch += 1
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, chkpt_pth_format: str):
         """Saves checkpoint on wandb and on the machine."""
         chkpt_dict = {
             "model": self.model.state_dict(),
@@ -95,8 +97,7 @@ class Trainer:
             "epoch": self.epoch,
             "training_samples_seen": self.training_samples_seen
         }
-        os.makedirs("checkpoints/", exist_ok=True)
-        pth = f"checkpoints/mae_vit_{self.epoch}_chkpt.pt"
+        pth = chkpt_pth_format.format(epoch=self.epoch)
         torch.save(chkpt_dict, pth)
         print("Saved checpoint at", pth)
 
@@ -156,12 +157,11 @@ class Trainer:
         """
         self.model = self.model.eval()
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
-        wandb_log_dict_with_prefix(valid_eval_dict, "validation", self.epoch)
         test_infer_dict  = self.evaluate_model_on_single_split(data_loaders["test"],  criterion)
+        valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
+        wandb_log_dict_with_prefix(valid_eval_dict, "validation", self.epoch)
         wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test",  self.epoch)
-        with torch.autograd.grad_mode.inference_mode(True):
-            valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
-            wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid", self.epoch)
+        wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid", self.epoch)
 
     @torch.no_grad
     def evaluate_model_on_single_split(

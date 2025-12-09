@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
 from torch.optim.lr_scheduler import LRScheduler, LambdaLR
 
-from mae.model import *
+from mae.model import MAE_ViT
 from src import configs as cfg
 from mae.utils import setup_seed
 from src.plotting import plt_sample
@@ -22,8 +22,8 @@ from src import dataset, metrics, timing
 
 
 # TODO:
-# - Optimize code (again)
 # - Add checkpoints
+# - Optimize code (again)... or just spend a lot of money on an H100
 # - Add submission
 # - Submit
 # - Switch to one cycle lr
@@ -47,7 +47,7 @@ def main():
     )
     # setup objects (no I didn't count the configs as objects...)
     model = mk_model(model_cfg, train_cfg)
-    train_loader, valid_loader, test_loader = mk_semi_supervised_data_loaders(train_cfg)
+    data_loaders = mk_semi_supervised_data_loaders(train_cfg)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         # TODO: Understand the scaling of the max_lr
@@ -64,16 +64,13 @@ def main():
         train_cfg,
     )
     # start training
-    Trainer().train_model(
+    trainer = Trainer(
         model,
         train_cfg,
         optimizer,
         lr_scheduler,
-        train_loader,
-        valid_loader,
-        test_loader,
-        criterion,
     )
+    trainer.train_model(data_loaders, criterion)
 
 def mk_model(model_cfg: cfg.ModelConfig, training_cfg: cfg.TrainingConfig, print_params_count=False) -> nn.Module:
     model = MAE_ViT(
@@ -101,7 +98,7 @@ def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRSc
         )
     return LambdaLR(optimizer, lr_lambda=lr_func)
 
-def mk_semi_supervised_data_loaders(train_cfg: cfg.TrainingConfig) -> tuple[DataLoader, DataLoader]:
+def mk_semi_supervised_data_loaders(train_cfg: cfg.TrainingConfig) -> dict[str, DataLoader]:
     x_train, y_train, x_test = dataset.load_raw_dataset(cfg.DEVICE)
     if not all(map(lambda t: t.dtype == torch.uint8, (x_train, x_test, y_train))):
         raise ValueError("Not all raw tensors are of dtype uint8.")
@@ -124,57 +121,58 @@ def mk_semi_supervised_data_loaders(train_cfg: cfg.TrainingConfig) -> tuple[Data
     train_loader = DataLoader(train_dataset, train_cfg.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, train_cfg.batch_size)
     test_loader = DataLoader(test_dataset, train_cfg.batch_size)
-    return train_loader, valid_loader, test_loader
+    return {
+        "train": train_loader,
+        "valid": valid_loader,
+        "test":  test_loader,
+    }
 
 class Trainer:
 
-    def train_model(
+    def __init__(
             self,
             model: torch.nn.Module,
             train_cfg: cfg.TrainingConfig,
             optimizer: torch.optim.Optimizer,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
-            train_loader: DataLoader,
-            valid_loader: DataLoader,
-            test_loader:  DataLoader,
+        ):
+        self.model = model
+        self.train_cfg = train_cfg
+        self.optimizer = optimizer
+        self.lr_scheduler = lr_scheduler
+
+    def train_model(
+            self,
+            data_loaders: dict[str, DataLoader],
             criterion: cfg.criterion_t,
         ) -> dict[str, Tensor]:
         self.training_samples_seen = 0
-        for epoch in tqdm(range(train_cfg.n_epochs)):
+        for epoch in tqdm(range(self.train_cfg.n_epochs)):
             self.epoch = epoch
-            if epoch % 200 == 0 or epoch == train_cfg.n_epochs - 1:
+            is_last_epoch = epoch == self.train_cfg.n_epochs - 1
+            if epoch % 100 == 0 or is_last_epoch:
                 with timing.time_to_run("evaluation/total"):
-                    self.evaluate_model(
-                        model,
-                        data_loaders={
-                            "valid": valid_loader,
-                            "train": train_loader,
-                            "test": test_loader,
-                        },
-                        criterion=criterion,
-                    )
+                    self.evaluate_model(data_loaders, criterion=criterion)
             with timing.time_to_run("training/total"):
-                training_dict = self.train_model_for_single_epoch(
-                    model,
-                    optimizer,
-                    lr_scheduler,
-                    train_loader,
-                    criterion,
-                )
+                training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
             wandb_log_dict_with_prefix(training_dict,   "training",   epoch)
-            if epoch % 5 == 0 or epoch == train_cfg.n_epochs - 1:
+            if epoch % 10 == 0 or is_last_epoch:
                 timing.print_time_dict()
+    #         if (epoch % 100 == 0 and epoch != 0) or is_last_epoch:
+    #             self.save_checkpoint()
+
+    # def save_checkpoint(self):
+    #     """Saves checkpoint on wandb and on the machine."""
+    #     chkpt_dict = {
+    #         "model": self.model,
+    #     }
 
     def train_model_for_single_epoch(
             self,
-            model: torch.nn.Module,
-            optimizer: torch.optim.Optimizer,
-
-            lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
             train_loader: torch.utils.data.DataLoader,
             criterion: cfg.criterion_t,
         ) -> dict[str, float]:
-        model.train()
+        self.model.train()
         n_batches = len(train_loader)
         mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
         epochs_steps_dicts: dict[str, Tensor] = defaultdict(mk_epoch_buff)
@@ -184,74 +182,56 @@ class Trainer:
                 x, y_true = next(batch_it)
                 x = dataset.preprocess_imgs(x)
             with timing.time_to_run("training/step"):
-                step_dict = self.perform_training_step(
-                    model,
-                    x,
-                    y_true,
-                    optimizer,
-                    criterion,
-                )
+                step_dict = self.perform_training_step(x, y_true, criterion)
             with timing.time_to_run("training/epoch_dict_store_values"):
                 for k, v in step_dict.items():
                     epochs_steps_dicts[k][batch_i] = v.detach()
         with timing.time_to_run("training/mk_ epoch_dict"):
             epoch_dict = {k: v.mean().item() for k, v in epochs_steps_dicts.items()}
             epoch_dict["training_samples_seen"] = self.training_samples_seen
-            epoch_dict["learning_rate"] = lr_scheduler.get_last_lr()[0]
+            epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         # TODO: Check if this shouldn't get called per step instead of per epoch.
-        lr_scheduler.step()
+        self.lr_scheduler.step()
         return epoch_dict
 
-    def perform_training_step(
-            self,
-            model: torch.nn.Module,
-            x: Tensor,
-            y_true: Tensor,
-            otpimizer: torch.optim.Optimizer,
-            criterion: cfg.criterion_t,
-        ) -> dict[str, Tensor]:
-        otpimizer.zero_grad()
+    def perform_training_step(self, x: Tensor, y_true: Tensor, criterion: cfg.criterion_t) -> dict[str, Tensor]:
+        self.optimizer.zero_grad()
         with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
             with timing.time_to_run("training/forward"):
-                predicted_img, mask = model(x)
+                predicted_img, mask = self.model(x)
             with timing.time_to_run("training/loss"):
                 loss_dict = criterion(x, predicted_img, mask, y_true)
         with timing.time_to_run("training/backprop"):
             loss_dict["loss"].backward()
         with timing.time_to_run("training/clip_grad_norm_"):
             loss_norm = torch.nn.utils.clip_grad_norm_(
-                model.parameters(),
+                self.model.parameters(),
                 1.0, # TODO: Hypertune this
             )
         with timing.time_to_run("training/optimizer step"):
-            otpimizer.step()
+            self.optimizer.step()
         self.training_samples_seen += len(x)
         return {**loss_dict, "loss_norm": loss_norm}
 
     @torch.no_grad
-    def evaluate_model(
-            self,
-            model: nn.Module,
-            data_loaders: dict[str, DataLoader],
-            criterion: cfg.criterion_t,
-        ):
+    def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: cfg.criterion_t):
         """
         Plots the reconstruction and segmentation of masked batches from all splits.
         Evaluates the reconstruction and seg losses of validation split in eval mode.
         Evaluates the seg losses of validation split in inference mode.
         Evaluates the recon of test split in eval mode.
         """
-        model = model.eval()
+        self.model = self.model.eval()
         if self.epoch != 0:
             for split_name, data_loader in data_loaders.items():
                 print(f"Training visualization on {split_name} batch:")
             # plt_model_preds(model, data_loader)
-        valid_eval_dict = self.evaluate_model_on_single_split(model, data_loaders["valid"], criterion)
+        valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
         wandb_log_dict_with_prefix(valid_eval_dict, "validation", self.epoch)
-        test_infer_dict  = self.evaluate_model_on_single_split(model, data_loaders["test"],  criterion)
+        test_infer_dict  = self.evaluate_model_on_single_split(data_loaders["test"],  criterion)
         wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test",  self.epoch)
         with torch.autograd.grad_mode.inference_mode(True):
-            valid_infer_dict = self.evaluate_model_on_single_split(model, data_loaders["valid"], criterion)
+            valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
             wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid", self.epoch)
             # if self.epoch != 0:
             #     for split_name, data_loader in data_loaders.items():
@@ -261,11 +241,10 @@ class Trainer:
     @torch.no_grad
     def evaluate_model_on_single_split(
             self,
-            model: nn.Module,
             data_loader: DataLoader,
             criterion: cfg.criterion_t,
         ) -> dict[str, Any]:
-        model = model.eval()
+        self.model = self.model.eval()
         n_batches = len(data_loader)
         mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
         eval_dict: dict[str, Tensor] = defaultdict(mk_epoch_buff)
@@ -274,10 +253,10 @@ class Trainer:
         for batch_i, (x, y_true) in enumerate(data_loader):
             x = dataset.preprocess_imgs(x)
             with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
-                predicted_img, mask = model(x)
+                predicted_img, mask = self.model(x)
                 loss_dict = criterion(x, predicted_img, mask, y_true)
             loss_dict["loss_norm"] = torch.nn.utils.clip_grad_norm_(
-                model.parameters(),
+                self.model.parameters(),
                 1.0, # TODO: Hypertune this
             )
             for k, v in loss_dict.items():

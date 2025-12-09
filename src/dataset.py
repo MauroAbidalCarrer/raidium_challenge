@@ -32,15 +32,6 @@ def get_data_loaders(
 
     return train_loader, valid_loader
 
-def mk_ssl_data_loader(train_cfg: TrainingConfig) -> DataLoader:
-    x_train, y_train, x_test = load_raw_dataset()
-    train_tensor = torch.cat((x_train, x_test)).to(device="cuda")
-    train_ds = TensorDataset(train_tensor)
-    return DataLoader(
-        train_ds,
-        train_cfg.batch_size,
-        shuffle=True,
-    )
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """
@@ -75,10 +66,10 @@ def preprocess_imgs(x: Tensor) -> Tensor:
     """
     return (x.to(device=DEVICE, dtype=torch.float) - MEAN) / STD
 
-def load_raw_dataset() -> tuple[Tensor, Tensor, Tensor]:
-    y_train: Tensor = torch.load("dataset/formatted/y-train.pt")
-    x_train = torch.load("dataset/formatted/x-train.pt").type(torch.float32)
-    x_test = torch.load("dataset/formatted/x-test.pt").type(torch.float32)
+def load_raw_dataset(device: torch.device) -> tuple[Tensor, Tensor, Tensor]:
+    y_train: Tensor = torch.load("dataset/formatted/y-train.pt").to(device=device, dtype=torch.uint8)
+    x_train = torch.load("dataset/formatted/x-train.pt").to(device=device, dtype=torch.uint8)
+    x_test = torch.load("dataset/formatted/x-test.pt").to(device=device, dtype=torch.uint8)
     return x_train, y_train, x_test
 
 def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Tensor, Tensor]:

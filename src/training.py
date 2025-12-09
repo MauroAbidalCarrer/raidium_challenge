@@ -115,6 +115,8 @@ class Trainer:
             with timing.time_to_run("training/get_batch and preprocess"):
                 x, y_true = next(batch_it)
                 x = dataset.preprocess_imgs(x)
+                if self.train_cfg.transform:
+                    x = self.train_cfg.transform(x)
             with timing.time_to_run("training/step"):
                 step_dict = self.perform_training_step(x, y_true, criterion)
             with timing.time_to_run("training/epoch_dict_store_values"):

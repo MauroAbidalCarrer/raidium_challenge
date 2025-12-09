@@ -72,6 +72,7 @@ class Trainer:
             chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
         self.training_samples_seen = 0
+        self.save_checkpoint(chkpt_pth_format)
         for _ in tqdm(range(self.epoch, self.train_cfg.n_epochs)):
             is_last_epoch = self.epoch == self.train_cfg.n_epochs - 1
             if self.epoch % 100 == 0 or is_last_epoch:
@@ -82,8 +83,7 @@ class Trainer:
             wandb_log_dict_with_prefix(training_dict, "training", self.epoch)
             if self.epoch % 10 == 0 or is_last_epoch:
                 timing.print_time_dict()
-            if (self.epoch % 100 == 0 and self.epoch != 0) or is_last_epoch:
-                self.save_checkpoint()
+            # if (self.epoch % 100 == 0 and self.epoch != 0) or is_last_epoch:
             self.epoch += 1
 
     def save_checkpoint(self, chkpt_pth_format: str):
@@ -98,7 +98,7 @@ class Trainer:
             "training_samples_seen": self.training_samples_seen
         }
         os.makedirs("checkpoints/", exist_ok=True)
-        pth = chkpt_pth_format.format(self.epoch)
+        pth = chkpt_pth_format.format(epoch=self.epoch)
         torch.save(chkpt_dict, pth)
         print("Saved checpoint at", pth)
 

@@ -23,12 +23,25 @@ class PatchShuffle(torch.nn.Module):
         self.ratio = ratio
 
     def forward(self, patches : torch.Tensor):
+        ratio = 0 if torch.is_inference_mode_enabled() else self.ratio
         T, B, C = patches.shape
-        remain_T = int(T * (1 - self.ratio))
+        remain_T = int(T * (1 - ratio))
 
         indexes = [random_indexes(T) for _ in range(B)]
-        forward_indexes = torch.as_tensor(np.stack([i[0] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
-        backward_indexes = torch.as_tensor(np.stack([i[1] for i in indexes], axis=-1), dtype=torch.long).to(patches.device)
+        forward_indexes = (
+            torch.as_tensor(
+                np.stack([i[0] for i in indexes], axis=-1),
+                dtype=torch.long
+            )
+            .to(patches.device)
+        )
+        backward_indexes = (
+            torch.as_tensor(
+                np.stack([i[1] for i in indexes], axis=-1),
+                dtype=torch.long
+            )
+            .to(patches.device)
+        )
 
         patches = take_indexes(patches, forward_indexes)
         patches = patches[:remain_T]

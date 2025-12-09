@@ -97,7 +97,6 @@ class Trainer:
             "epoch": self.epoch,
             "training_samples_seen": self.training_samples_seen
         }
-        os.makedirs("checkpoints/", exist_ok=True)
         pth = chkpt_pth_format.format(epoch=self.epoch)
         torch.save(chkpt_dict, pth)
         print("Saved checpoint at", pth)

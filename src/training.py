@@ -156,12 +156,11 @@ class Trainer:
         """
         self.model = self.model.eval()
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
-        wandb_log_dict_with_prefix(valid_eval_dict, "validation", self.epoch)
         test_infer_dict  = self.evaluate_model_on_single_split(data_loaders["test"],  criterion)
+        valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
+        wandb_log_dict_with_prefix(valid_eval_dict, "validation", self.epoch)
         wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test",  self.epoch)
-        with torch.autograd.grad_mode.inference_mode(True):
-            valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
-            wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid", self.epoch)
+        wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid", self.epoch)
 
     @torch.no_grad
     def evaluate_model_on_single_split(

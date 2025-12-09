@@ -36,28 +36,8 @@ class SemiSupervisedLoss:
         pix_wise_rec_loss = F.mse_loss(x_hat[:, 0], x[:, 0], reduction="none")
         pix_wise_rec_loss = pix_wise_rec_loss * mask[:, 0] / self.train_cfg.mask_ratio
         rec_loss = pix_wise_rec_loss.mean()
-        # # Create labeled samples mask to compute seg loss only on them
-        # seg_loss_mask = (y_true.flatten(1) != 0 ).any(dim=1)
-        # # Cross entropy loss
-        # y_pred = x_hat[:, 1:]
-        # y_true = y_true.long()
-        # ce_loss = self.cross_entropy_loss(
-        #     y_pred[seg_loss_mask],
-        #     y_true[seg_loss_mask],
-        # )
-        # # Dice loss
-        # base_d_loss = metrics.torch_dice_loss(
-        #     y_pred[seg_loss_mask],
-        #     y_true[seg_loss_mask],
-        # )
-        # Weighted average
-        # loss = base_d_loss * self.train_cfg.dice_loss_weight          \
-        #      + ce_loss     * self.train_cfg.cross_entropy_loss_weight 
-            #  + rec_loss    * self.train_cfg.rec_loss_weight
         return {
             "loss": rec_loss,
-            # "cross_entropy_loss": ce_loss,
-            # "dice_loss": base_d_loss,
             "rec_loss": rec_loss,
         }
 
@@ -102,22 +82,29 @@ def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray) -> float:
 class SegmentationLoss:
     def __init__(self, train_cfg: TrainingConfig):
         self.train_cfg = train_cfg
-        weight = get_class_weights().to(DEVICE) if train_cfg.use_labels_weight else None
+        weight = get_class_weights().to(DEVICE)
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=weight)
     
-    def __call__(self, y_pred: Tensor, y_true: Tensor) -> dict[str, Tensor]:
+    def __call__(
+            self,
+            x: Tensor,
+            x_hat: Tensor,
+            mask: Tensor,
+            y_true: Tensor,
+        ) -> dict[str, Tensor]:
         """
         Computes the weighted average of the cross entropy and dice loss of y pred.
         ### Returns:
         Dictionnary of loss_average, ce_loss and dice_loss
         """
         y_true = y_true.long()
+        y_pred = x_hat[:, 1:]
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
         base_d_loss = torch_dice_loss(y_pred, y_true)
         loss = base_d_loss * self.train_cfg.dice_loss_weight \
             + ce_loss * self.train_cfg.cross_entropy_loss_weight
-        return loss, {
-            "average_loss": loss,
+        return {
+            "loss": loss,
             "cross_entropy_loss": ce_loss,
             "dice_loss": base_d_loss,
         }

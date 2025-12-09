@@ -1,6 +1,9 @@
+import os
+import sys
 import math
 from tqdm import tqdm
-from typing import Any
+from pathlib import Path
+from typing import Any, overload
 from collections import defaultdict
 
 import torch
@@ -22,24 +25,28 @@ from src import dataset, metrics, timing
 
 
 # TODO:
-# - Add checkpoints
-# - Optimize code (again)... or just spend a lot of money on an H100
-# - Add submission
-# - Submit
+# - Add checkpoints save/loading
+# - Optimize code (again) ... or just spend a lot of money on n H100
+# - Add submission creation and submit
 # - Switch to one cycle lr
 
 
 def main():
-    # system setup
-    dataset.mk_dataset(verbose=False)
-    torch.backends.cuda.matmul.fp32_precision = 'ieee'
+    if len(sys.argv) > 1:
+        trainer = Trainer.from_checkpoint(sys.argv[1])
+    else:
+        trainer = mk_trainer_from_scratch()
+    data_loaders = mk_semi_supervised_data_loaders(trainer.train_cfg)
+    criterion = SemiSupervisedLoss(trainer.train_cfg)
+    trainer.train_model(data_loaders, criterion)
+
+def mk_trainer_from_scratch() -> "Trainer":
     # setup configs
     train_cfg = cfg.TrainingConfig(
         max_lr=1e-3,
         n_epochs=5000,
         batch_size=64,
     )
-    setup_seed(train_cfg.random_state)
     model_cfg = cfg.ModelConfig(
         n_encoder_heads=8,
         n_encoder_layers=4,
@@ -47,30 +54,15 @@ def main():
     )
     # setup objects (no I didn't count the configs as objects...)
     model = mk_model(model_cfg, train_cfg)
-    data_loaders = mk_semi_supervised_data_loaders(train_cfg)
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        # TODO: Understand the scaling of the max_lr
-        lr=train_cfg.max_lr,
-        betas=(0.9, 0.95),
-    )
+    optimizer = mk_optimizer(model, train_cfg)
     lr_scheduler = mk_lr_scheduler(train_cfg, optimizer)
-    criterion = SemiSupervisedLoss(train_cfg)
-    # Initilaze weights and biases run
-    wandb_init(
-        model,
-        cfg.WandbConfig(["pretraining", "MAE"], "pretraining"),
-        model_cfg,
-        train_cfg,
-    )
     # start training
-    trainer = Trainer(
+    return Trainer(
         model,
         train_cfg,
         optimizer,
         lr_scheduler,
     )
-    trainer.train_model(data_loaders, criterion)
 
 def mk_model(model_cfg: cfg.ModelConfig, training_cfg: cfg.TrainingConfig, print_params_count=False) -> nn.Module:
     model = MAE_ViT(
@@ -127,8 +119,16 @@ def mk_semi_supervised_data_loaders(train_cfg: cfg.TrainingConfig) -> dict[str, 
         "test":  test_loader,
     }
 
-class Trainer:
+def mk_optimizer(model: nn.Module, train_cfg: cfg.TrainingConfig) -> Optimizer:
+    return torch.optim.AdamW(
+        model.parameters(),
+        # TODO: Understand the scaling of the max_lr
+        lr=train_cfg.max_lr,
+        betas=(0.9, 0.95),
+    )
 
+
+class Trainer:
     def __init__(
             self,
             model: torch.nn.Module,
@@ -136,10 +136,38 @@ class Trainer:
             optimizer: torch.optim.Optimizer,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
         ):
-        self.model = model
-        self.train_cfg = train_cfg
-        self.optimizer = optimizer
-        self.lr_scheduler = lr_scheduler
+        if isinstance(model, nn.Module):
+            self.model = model
+            self.train_cfg = train_cfg
+            self.optimizer = optimizer
+            self.lr_scheduler = lr_scheduler
+            self.epoch = 0
+            self.training_samples_seen = 0
+        
+        dataset.mk_dataset(verbose=False)
+        torch.backends.cuda.matmul.fp32_precision = 'ieee'
+        setup_seed(train_cfg.random_state)
+        # Initilaze weights and biases run
+        wandb_init(
+            self.model,
+            cfg.WandbConfig(["pretraining", "MAE"], "pretraining"),
+            self.model.cfg,
+            train_cfg,
+        )
+
+    @classmethod
+    def from_checkpoint(cls, path: str | Path):
+        print("Starting training from checkpoint:", path)
+        chkpt = torch.load(path, weights_only=False)
+        train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
+        model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
+        model = mk_model(model_cfg, train_cfg, True)
+        optimizer = mk_optimizer(model, train_cfg)
+        lr_sched = mk_lr_scheduler(train_cfg, optimizer)
+        trainer = cls(model, train_cfg, optimizer, lr_sched)
+        trainer.epoch = chkpt["epoch"]
+        trainer.training_samples_seen = chkpt["training_samples_seen"]
+        return trainer
 
     def train_model(
             self,
@@ -147,25 +175,35 @@ class Trainer:
             criterion: cfg.criterion_t,
         ) -> dict[str, Tensor]:
         self.training_samples_seen = 0
-        for epoch in tqdm(range(self.train_cfg.n_epochs)):
-            self.epoch = epoch
-            is_last_epoch = epoch == self.train_cfg.n_epochs - 1
-            if epoch % 100 == 0 or is_last_epoch:
+        for _ in tqdm(range(self.epoch, self.train_cfg.n_epochs)):
+            is_last_epoch = self.epoch == self.train_cfg.n_epochs - 1
+            if self.epoch % 100 == 0 or is_last_epoch:
                 with timing.time_to_run("evaluation/total"):
                     self.evaluate_model(data_loaders, criterion=criterion)
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
-            wandb_log_dict_with_prefix(training_dict,   "training",   epoch)
-            if epoch % 10 == 0 or is_last_epoch:
+            wandb_log_dict_with_prefix(training_dict, "training", self.epoch)
+            if self.epoch % 10 == 0 or is_last_epoch:
                 timing.print_time_dict()
-    #         if (epoch % 100 == 0 and epoch != 0) or is_last_epoch:
-    #             self.save_checkpoint()
+            if (self.epoch % 100 == 0 and self.epoch != 0) or is_last_epoch:
+                self.save_checkpoint()
+            self.epoch += 1
 
-    # def save_checkpoint(self):
-    #     """Saves checkpoint on wandb and on the machine."""
-    #     chkpt_dict = {
-    #         "model": self.model,
-    #     }
+    def save_checkpoint(self):
+        """Saves checkpoint on wandb and on the machine."""
+        chkpt_dict = {
+            "model": self.model.state_dict(),
+            "model_cfg": vars(self.model.cfg),
+            "train_cfg": vars(self.train_cfg),
+            "optimizer": self.optimizer.state_dict(),
+            "lr_scheduler": self.lr_scheduler.state_dict(),
+            "epoch": self.epoch,
+            "training_samples_seen": self.training_samples_seen
+        }
+        os.makedirs("checkpoints/", exist_ok=True)
+        pth = f"checkpoints/mae_vit_{self.epoch}_chkpt.pt"
+        torch.save(chkpt_dict, pth)
+        print("Saved checpoint at", pth)
 
     def train_model_for_single_epoch(
             self,

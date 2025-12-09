@@ -1,6 +1,6 @@
 # mae_vit_batchfirst.py
 from __future__ import annotations
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 from torch import Tensor, nn
@@ -10,9 +10,6 @@ from timm.models.layers import trunc_normal_
 from timm.models.vision_transformer import Block
 
 
-# -------------------------
-# Helper: batched gather along token dimension (dim=1)
-# -------------------------
 def gather_batch(x: Tensor, idx: Tensor) -> Tensor:
     """
     Gather tokens from x (B, T, C) according to idx (B, T_idx) per-batch.
@@ -26,9 +23,6 @@ def gather_batch(x: Tensor, idx: Tensor) -> Tensor:
     return torch.gather(x, dim=1, index=idx_exp)
 
 
-# -------------------------
-# PatchShuffle - batch-first
-# -------------------------
 class PatchShuffleBF(nn.Module):
     """
     Batch-first patch shuffle + mask:
@@ -76,9 +70,6 @@ class PatchShuffleBF(nn.Module):
         return visible, forward_idx_bt, backward_idx_bt
 
 
-# -------------------------
-# MAE Encoder (batch-first)
-# -------------------------
 class MAE_EncoderBF(nn.Module):
     def __init__(
         self,
@@ -119,7 +110,7 @@ class MAE_EncoderBF(nn.Module):
         trunc_normal_(self.cls_token, std=0.02)
         trunc_normal_(self.pos_embedding, std=0.02)
 
-    def forward(self, img: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(self, img: Tensor, mask_ratio: Optional[float]=None) -> Tuple[Tensor, Tensor, Tensor]:
         """
         img: (B, in_channels, H, W)
         returns:
@@ -127,6 +118,7 @@ class MAE_EncoderBF(nn.Module):
           - forward_idx_bt: (B, T)
           - backward_idx_bt: (B, T)
         """
+        mask_ratio = mask_ratio or self.mask_ratio
         B = img.shape[0]
 
         # patchify -> (B, C, h, w)
@@ -149,9 +141,6 @@ class MAE_EncoderBF(nn.Module):
         return features_bt, forward_idx_bt, backward_idx_bt
 
 
-# -------------------------
-# MAE Decoder (batch-first)
-# -------------------------
 class MAE_DecoderBF(nn.Module):
     def __init__(
         self,
@@ -288,14 +277,15 @@ class MAE_ViT(nn.Module):
             out_channels=out_channels,
         )
 
-    def forward(self, img: Tensor) -> Tuple[Tensor, Tensor]:
+    def forward(self, img: Tensor, mask_ratio: Optional[float]=None) -> Tuple[Tensor, Tensor]:
         """
         img: (B, in_channels, H, W)
         returns:
           - predicted image: (B, out_ch, H, W)
           - mask image: (B, out_ch, H, W)
         """
-        features_bt, forward_idx_bt, backward_idx_bt = self.encoder(img)
+        mask_ratio = mask_ratio or self.mask_ratio
+        features_bt, forward_idx_bt, backward_idx_bt = self.encoder(img, mask_ratio)
         pred_img, mask_img = self.decoder(features_bt, backward_idx_bt)
         return pred_img, mask_img
 

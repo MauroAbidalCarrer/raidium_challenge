@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
 
 from src.configs import TrainingConfig, DEVICE
+from sklearn.model_selection import train_test_split
 
 
 def get_data_loaders(
@@ -32,6 +33,34 @@ def get_data_loaders(
 
     return train_loader, valid_loader
 
+def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, DataLoader]:
+    x_train, y_train, x_test = load_raw_dataset(DEVICE)
+    if not all(map(lambda t: t.dtype == torch.uint8, (x_train, x_test, y_train))):
+        raise ValueError("Not all raw tensors are of dtype uint8.")
+    x_train, x_valid, y_train, y_valid = train_test_split(
+        x_train,
+        y_train,
+        test_size=train_cfg.test_size,
+    )
+    x_train = torch.cat((x_train, x_test))
+    y_test_zeros = torch.zeros(
+        x_test.shape[0], 256, 256,
+        dtype=torch.uint8,
+        device=y_train.device,
+    )
+
+    y_train = torch.cat((y_train, y_test_zeros))
+    train_dataset = TensorDataset(x_train, y_train)
+    valid_dataset = TensorDataset(x_valid, y_valid)
+    test_dataset  = TensorDataset(x_test, y_test_zeros)
+    train_loader = DataLoader(train_dataset, train_cfg.batch_size, shuffle=True)
+    valid_loader = DataLoader(valid_dataset, train_cfg.batch_size)
+    test_loader = DataLoader(test_dataset, train_cfg.batch_size)
+    return {
+        "train": train_loader,
+        "valid": valid_loader,
+        "test":  test_loader,
+    }
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """

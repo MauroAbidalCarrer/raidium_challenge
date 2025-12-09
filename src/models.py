@@ -3,12 +3,14 @@ from __future__ import annotations
 from typing import Tuple, Optional
 
 import torch
+import numpy as np
 from torch import Tensor, nn
 from einops import rearrange
 from einops.layers.torch import Rearrange
 from timm.models.layers import trunc_normal_
 from timm.models.vision_transformer import Block
 
+import src.configs as cfg
 
 def gather_batch(x: Tensor, idx: Tensor) -> Tensor:
     """
@@ -31,9 +33,9 @@ class PatchShuffleBF(nn.Module):
     """
     def __init__(self, ratio: float) -> None:
         super().__init__()
-        self.ratio = float(ratio)
+        self.ratio = ratio
 
-    def forward(self, patches_bt: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(self, patches_bt: Tensor, mask_ratio: float) -> Tuple[Tensor, Tensor, Tensor]:
         """
         patches_bt: (B, T, C)
         returns:
@@ -47,7 +49,7 @@ class PatchShuffleBF(nn.Module):
         B, T, C = patches_bt.shape
         device = patches_bt.device
 
-        ratio = 0.0 if torch.is_inference_mode_enabled() else self.ratio
+        ratio = mask_ratio
         T_vis = int(T * (1.0 - ratio))
         if T_vis == T:
             # trivial: identity permutation
@@ -110,7 +112,7 @@ class MAE_EncoderBF(nn.Module):
         trunc_normal_(self.cls_token, std=0.02)
         trunc_normal_(self.pos_embedding, std=0.02)
 
-    def forward(self, img: Tensor, mask_ratio: Optional[float]=None) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(self, img: Tensor, mask_ratio: float) -> Tuple[Tensor, Tensor, Tensor]:
         """
         img: (B, in_channels, H, W)
         returns:
@@ -118,7 +120,6 @@ class MAE_EncoderBF(nn.Module):
           - forward_idx_bt: (B, T)
           - backward_idx_bt: (B, T)
         """
-        mask_ratio = mask_ratio or self.mask_ratio
         B = img.shape[0]
 
         # patchify -> (B, C, h, w)
@@ -129,7 +130,7 @@ class MAE_EncoderBF(nn.Module):
         patches = patches + self.pos_embedding  # (B, T, C)
 
         # shuffle and mask (batch-first)
-        visible, forward_idx_bt, backward_idx_bt = self.shuffle(patches)  # visible: (B, T_vis, C)
+        visible, forward_idx_bt, backward_idx_bt = self.shuffle(patches, mask_ratio)  # visible: (B, T_vis, C)
 
         # prepend cls token and run transformer
         cls = self.cls_token.expand(B, -1, -1).contiguous()  # (B,1,C)
@@ -254,7 +255,6 @@ class MAE_ViT(nn.Module):
         encoder_head: int = 8,
         decoder_layer: int = 3,
         decoder_head: int = 8,
-        mask_ratio: float = 0.75,
         in_channels: int = 1,
         out_channels: int = 1,
     ):
@@ -265,7 +265,7 @@ class MAE_ViT(nn.Module):
             emb_dim=emb_dim,
             num_layer=encoder_layer,
             num_head=encoder_head,
-            mask_ratio=mask_ratio,
+            mask_ratio=None,
             in_channels=in_channels,
         )
         self.decoder = MAE_DecoderBF(
@@ -277,22 +277,36 @@ class MAE_ViT(nn.Module):
             out_channels=out_channels,
         )
 
-    def forward(self, img: Tensor, mask_ratio: Optional[float]=None) -> Tuple[Tensor, Tensor]:
+    def forward(self, img: Tensor, mask_ratio: float) -> Tuple[Tensor, Tensor]:
         """
         img: (B, in_channels, H, W)
         returns:
           - predicted image: (B, out_ch, H, W)
           - mask image: (B, out_ch, H, W)
         """
-        mask_ratio = mask_ratio or self.mask_ratio
         features_bt, forward_idx_bt, backward_idx_bt = self.encoder(img, mask_ratio)
         pred_img, mask_img = self.decoder(features_bt, backward_idx_bt)
         return pred_img, mask_img
 
+    @classmethod
+    def from_config(cls, model_cfg: cfg.ModelConfig, print_params_count: bool=False) -> "MAE_ViT":
+        model = cls(
+            image_size=256,
+            patch_size=16,
+            emb_dim=256,
+            out_channels=cfg.N_CLASSES + 1,
+            decoder_head=model_cfg.n_decoder_heads,
+            encoder_head=model_cfg.n_encoder_heads,
+            decoder_layer=model_cfg.n_encoder_layers,
+        ).to(cfg.DEVICE)
+        model.cfg = model_cfg
+        if print_params_count:
+            model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+            params = sum([np.prod(p.size()) for p in model_parameters])
+            print("number of parameters:", str(params // 1e6) + "M")
+        return model
 
-# -------------------------
-# Sanity check
-# -------------------------
+
 if __name__ == "__main__":
     torch.manual_seed(0)
     B = 64

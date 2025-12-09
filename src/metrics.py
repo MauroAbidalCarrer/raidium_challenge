@@ -13,6 +13,53 @@ from src.configs import (
     DEVICE,
 )
 
+from src import configs as cfg
+
+
+class SemiSupervisedLoss:
+    """
+    Computes a weighted average of mse loss of the images reconstruction, dice score and cross entropy.
+    """
+    def __init__(self, train_cfg: cfg.TrainingConfig):
+        weight = get_class_weights().to(cfg.DEVICE)
+        self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=weight)
+        self.train_cfg = train_cfg
+
+    def __call__(
+            self,
+            x: Tensor,
+            x_hat: Tensor,
+            mask: Tensor,
+            y_true: Tensor,
+        ) -> dict[str, Tensor]:
+        # reconstruction loss
+        pix_wise_rec_loss = F.mse_loss(x_hat[:, 0], x[:, 0], reduction="none")
+        pix_wise_rec_loss = pix_wise_rec_loss * mask[:, 0] / self.train_cfg.mask_ratio
+        rec_loss = pix_wise_rec_loss.mean()
+        # # Create labeled samples mask to compute seg loss only on them
+        # seg_loss_mask = (y_true.flatten(1) != 0 ).any(dim=1)
+        # # Cross entropy loss
+        # y_pred = x_hat[:, 1:]
+        # y_true = y_true.long()
+        # ce_loss = self.cross_entropy_loss(
+        #     y_pred[seg_loss_mask],
+        #     y_true[seg_loss_mask],
+        # )
+        # # Dice loss
+        # base_d_loss = metrics.torch_dice_loss(
+        #     y_pred[seg_loss_mask],
+        #     y_true[seg_loss_mask],
+        # )
+        # Weighted average
+        # loss = base_d_loss * self.train_cfg.dice_loss_weight          \
+        #      + ce_loss     * self.train_cfg.cross_entropy_loss_weight 
+            #  + rec_loss    * self.train_cfg.rec_loss_weight
+        return {
+            "loss": rec_loss,
+            # "cross_entropy_loss": ce_loss,
+            # "dice_loss": base_d_loss,
+            "rec_loss": rec_loss,
+        }
 
 def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray) -> float:
     """

@@ -27,7 +27,7 @@ class OptimizerConfig:
 
 @dataclass
 class TrainingConfig:
-    n_epochs: int = 600
+    n_epochs: int = 5000
     batch_size: int = 128
     test_size: float = 0.02
     # losses
@@ -37,6 +37,7 @@ class TrainingConfig:
     mask_ratio: float = 0.75
     random_state: int = 0
     optim_cfg: OptimizerConfig=field(default_factory=OptimizerConfig)
+    start_lr: float=2e-4
     max_lr: float=1e-3
     n_warmup_epochs: int = 50
     transform: v2.Transform = v2.Compose([

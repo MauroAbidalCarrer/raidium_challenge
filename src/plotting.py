@@ -50,6 +50,7 @@ def plt_model_preds(
         model: torch.nn.Module,
         data_loader: torch.utils.data.DataLoader,
         plt_recon: bool=True,
+        mask_ratio=0.75,
     ):
     """Plots the model's reconstruction and segmentation."""
     model.eval()
@@ -61,7 +62,7 @@ def plt_model_preds(
         y_true = y_true[sample_has_seg]
     x = dataset.preprocess_imgs(x)
     x = x[:N_IMGS_TO_PLT]
-    x_hat, mask = model(x)
+    x_hat, mask = model(x, mask_ratio)
     x_hat_img = x_hat[:, :1]
     mask = mask[:, :1]
     x_hat_img = x_hat_img * mask + x * (1 - mask)
@@ -83,7 +84,7 @@ def plt_recon_imgs(
     # Combine images along batch dimension
     img = torch.cat(
         [
-            # x * (1 - mask),   # optional: masked input
+            x * (1 - mask),   # optional: masked input
             x_hat_img,
             x,
         ],
@@ -96,7 +97,7 @@ def plt_recon_imgs(
     n_imgs = np_imgs.shape[0]
     n_rows = (n_imgs + n_cols - 1) // n_cols
     fig, axes = plt.subplots(
-        2, n_imgs_to_plt,
+        3, n_imgs_to_plt,
         figsize=(n_cols * 2, n_rows * 2),
         squeeze=False
     )

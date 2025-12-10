@@ -11,7 +11,12 @@ import numpy as np
 from torch import nn, Tensor
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import LRScheduler, LambdaLR
+from torch.optim.lr_scheduler import (
+    LRScheduler,
+    OneCycleLR,
+    LambdaLR,
+    ConstantLR
+)
 
 from src import (
     dataset,
@@ -32,14 +37,12 @@ class Trainer:
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
             wandb_cfg: cfg.WandbConfig,
         ):
-        if isinstance(model, nn.Module):
-            self.model = model
-            self.train_cfg = train_cfg
-            self.optimizer = optimizer
-            self.lr_scheduler = lr_scheduler
-            self.epoch = 0
-            self.training_samples_seen = 0
-        
+        self.model = model
+        self.train_cfg = train_cfg
+        self.optimizer = optimizer
+        self.lr_scheduler = lr_scheduler
+        self.epoch = 0
+        self.training_samples_seen = 0
         dataset.mk_dataset(verbose=False)
         torch.backends.cuda.matmul.fp32_precision = 'ieee'
         utils.setup_seed(train_cfg.random_state)
@@ -58,8 +61,11 @@ class Trainer:
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
         model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
         model = models.MAE_ViT.from_config(model_cfg, print_params_count=True)
+        model.load_state_dict(chkpt["model"])
         optimizer = mk_optimizer(model, train_cfg)
+        optimizer.load_state_dict(chkpt["optimizer"])
         lr_sched = mk_lr_scheduler(train_cfg, optimizer)
+        lr_sched.load_state_dict(chkpt["lr_scheduler"])
         trainer = cls(model, train_cfg, optimizer, lr_sched, wandb_cfg)
         trainer.epoch = chkpt["epoch"]
         trainer.training_samples_seen = chkpt["training_samples_seen"]
@@ -225,17 +231,23 @@ def wandb_log_dict_with_prefix(data: dict[str, Any], prefix: str, step: int):
     )
     
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:
-    def lr_func(epoch: int) -> float:
-        return min(
-            (epoch + 1) / (train_cfg.n_warmup_epochs + 1e-8),
-            0.5 * (math.cos(epoch / train_cfg.n_epochs * math.pi) + 1)
-        )
-    return LambdaLR(optimizer, lr_lambda=lr_func)
+    # def lr_func(epoch: int) -> float:
+    #     return min(
+    #         (epoch + 1) / (train_cfg.n_warmup_epochs + 1e-8),
+    #         0.5 * (math.cos(epoch / train_cfg.n_epochs * math.pi) + 1)
+    #     )
+    # return LambdaLR(optimizer, lr_lambda=lr_func)
+    # return OneCycleLR(
+    #     optimizer,
+    #     train_cfg.max_lr,
+    #     total_steps=train_cfg.n_epochs
+    # )
+    return ConstantLR(optimizer, factor=1)
 
 def mk_optimizer(model: nn.Module, train_cfg: cfg.TrainingConfig) -> Optimizer:
     return torch.optim.AdamW(
         model.parameters(),
         # TODO: Understand the scaling of the max_lr
-        lr=train_cfg.max_lr,
+        lr=train_cfg.start_lr,
         betas=(0.9, 0.95),
     )

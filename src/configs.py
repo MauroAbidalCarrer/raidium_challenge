@@ -34,6 +34,7 @@ class TrainingConfig:
     cross_entropy_loss_weight: float = 1
     dice_loss_weight: float = 2
     rec_loss_weight: float = 1
+    mask_rec_loss_weight: float = 2
     mask_ratio: float = 0.75
     random_state: int = 0
     optim_cfg: OptimizerConfig=field(default_factory=OptimizerConfig)

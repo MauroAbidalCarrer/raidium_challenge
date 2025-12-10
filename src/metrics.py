@@ -33,8 +33,11 @@ class SemiSupervisedLoss:
             y_true: Tensor,
         ) -> dict[str, Tensor]:
         # reconstruction loss
-        pix_wise_rec_loss = F.mse_loss(x_hat[:, 0], x[:, 0], reduction="none")
-        pix_wise_rec_loss = pix_wise_rec_loss * mask[:, 0] / self.train_cfg.mask_ratio
+        y_true_is_mask = y_true > 0
+        pixel_wise_rec_loss_weight = (y_true_is_mask * self.train_cfg.mask_rec_loss_weight ) + ~y_true_is_mask * 1
+        pixel_wise_rec_loss_weight = pixel_wise_rec_loss_weight * mask[:, 0]
+        pix_wise_rec_loss = F.mse_loss(x_hat[:, 0], x[:, 0], reduction="none") 
+        pix_wise_rec_loss = pix_wise_rec_loss * pixel_wise_rec_loss_weight / self.train_cfg.mask_ratio
         rec_loss = pix_wise_rec_loss.mean()
         return {
             "loss": rec_loss,

@@ -10,6 +10,7 @@ import torch
 import wandb
 import numpy as np
 from torch import nn, Tensor
+import torch.nn.functional as F
 from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
@@ -51,7 +52,7 @@ def main():
     model.load_state_dict(checkpt_dict["model"])
     for param in model.encoder.parameters():
         param.requires_grad = False
-    criterion = metrics.SegmentationLoss(train_cfg)
+    criterion = ClassWeightedMSE(1e-4)
     optimizer = training.mk_optimizer(model, train_cfg)
     lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
     trainer = training.Trainer(
@@ -66,6 +67,33 @@ def main():
         criterion,
         "checkpoints/finetuned/vit_epoch{epoch}.pt"
     )
+
+class ClassWeightedMSE:
+    def __init__(self, pixel_weight: float=0):
+        class_weights = metrics.get_class_weights()
+        class_weights = torch.cat((
+            torch.ones(1) * pixel_weight,
+            class_weights
+        ))
+        self.class_weights = class_weights.unsqueeze(0)
+    
+    def __call__(
+            self,
+            x: Tensor,
+            x_hat: Tensor,
+            mask: Tensor,
+            y_true: Tensor,
+        ) -> dict[str, Tensor]:
+        one_hot_encoded_y_true = F.one_hot(y_true.long(), cfg.N_CLASSES)
+        x = torch.cat(
+            (x, one_hot_encoded_y_true.float().unsqueeze(1)),
+            dim=1,
+        )
+        unreduced_mse = F.mse_loss(x_hat, x, reduction="none") # B, C, H, W
+        img_reduced_mse = unreduced_mse.flatten(2).mean(dim=2) # B, C
+        img_reduced_mse = img_reduced_mse * self.class_weights # B, C
+        mse = img_reduced_mse.mean()
+        return mse
 
 def mk_data_loaders_for_finetuning(
         train_cfg: cfg.TrainingConfig

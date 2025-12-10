@@ -52,7 +52,7 @@ class Trainer:
         )
 
     @classmethod
-    def from_checkpoint(cls, path: str | Path):
+    def from_checkpoint(cls, path: str | Path, wandb_cfg: cfg.WandbConfig):
         print("Starting training from checkpoint:", path)
         chkpt = torch.load(path, weights_only=False)
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
@@ -60,7 +60,7 @@ class Trainer:
         model = models.MAE_ViT.from_config(model_cfg, print_params_count=True)
         optimizer = mk_optimizer(model, train_cfg)
         lr_sched = mk_lr_scheduler(train_cfg, optimizer)
-        trainer = cls(model, train_cfg, optimizer, lr_sched)
+        trainer = cls(model, train_cfg, optimizer, lr_sched, wandb_cfg)
         trainer.epoch = chkpt["epoch"]
         trainer.training_samples_seen = chkpt["training_samples_seen"]
         return trainer
@@ -72,7 +72,6 @@ class Trainer:
             chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
         self.training_samples_seen = 0
-        self.save_checkpoint(chkpt_pth_format)
         for _ in tqdm(range(self.epoch, self.train_cfg.n_epochs)):
             is_last_epoch = self.epoch == self.train_cfg.n_epochs - 1
             if self.epoch % 100 == 0 or is_last_epoch:
@@ -83,7 +82,8 @@ class Trainer:
             wandb_log_dict_with_prefix(training_dict, "training", self.epoch)
             if self.epoch % 10 == 0 or is_last_epoch:
                 timing.print_time_dict()
-            # if (self.epoch % 100 == 0 and self.epoch != 0) or is_last_epoch:
+            if (self.epoch % 100 == 0 and self.epoch != 0) or is_last_epoch:
+                self.save_checkpoint(chkpt_pth_format)
             self.epoch += 1
 
     def save_checkpoint(self, chkpt_pth_format: str):
@@ -115,6 +115,8 @@ class Trainer:
             with timing.time_to_run("training/get_batch and preprocess"):
                 x, y_true = next(batch_it)
                 x = dataset.preprocess_imgs(x)
+                if self.train_cfg.transform:
+                    x = self.train_cfg.transform(x)
             with timing.time_to_run("training/step"):
                 step_dict = self.perform_training_step(x, y_true, criterion)
             with timing.time_to_run("training/epoch_dict_store_values"):
@@ -225,7 +227,7 @@ def wandb_log_dict_with_prefix(data: dict[str, Any], prefix: str, step: int):
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:
     def lr_func(epoch: int) -> float:
         return min(
-            (epoch + 1) / (train_cfg.n_epochs // 10 + 1e-8),
+            (epoch + 1) / (train_cfg.n_warmup_epochs + 1e-8),
             0.5 * (math.cos(epoch / train_cfg.n_epochs * math.pi) + 1)
         )
     return LambdaLR(optimizer, lr_lambda=lr_func)

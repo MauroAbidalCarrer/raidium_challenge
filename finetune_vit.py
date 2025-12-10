@@ -87,15 +87,6 @@ def mk_data_loaders_for_finetuning(
         "test": mk_dl_from_tensors(x_test, y_test_fill),
     }
 
-def mk_trainer_from_scratch() -> training.Trainer:
-    # setup configs
-    train_cfg = cfg.TrainingConfig(
-        max_lr=1e-3,
-        n_epochs=500,
-        batch_size=64,
-    )
-    return 
-
 
 if __name__ == "__main__":
     main()

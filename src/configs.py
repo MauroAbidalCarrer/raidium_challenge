@@ -20,20 +20,6 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 criterion_t = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
 
 @dataclass
-class DatasetConfig:
-    transform: v2.Transform = v2.Compose([
-        v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-        v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-        v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-        v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-        v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-        v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-        v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-        v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-        v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
-    ])
-
-@dataclass
 class OptimizerConfig:
     starting_lr: float = 5e-4
     beta0: float = 0.9
@@ -52,6 +38,11 @@ class TrainingConfig:
     random_state: int = 0
     optim_cfg: OptimizerConfig=field(default_factory=OptimizerConfig)
     max_lr: float=1e-3
+    n_warmup_epochs: int = 50
+    transform: v2.Transform = v2.Compose([
+        # v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+        v2.RandomAffine(degrees=(-20, 20), translate=(0.1, 0.3), scale=(0.75, 2)),
+    ])
 
 @dataclass
 class WandbConfig:

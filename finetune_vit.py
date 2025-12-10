@@ -31,8 +31,9 @@ from src.plotting import plt_sample
 
 
 def main():
-    if len(sys.argv) <= 1:
+    if len(sys.argv) < 2:
         print("Please provide a path to a pretrained ViT checkpoint.")
+        exit(1)
     chkpt_pth = sys.argv[1]
     checkpt_dict = torch.load(chkpt_pth, weights_only=False)
     train_cfg = cfg.TrainingConfig(
@@ -40,6 +41,7 @@ def main():
         batch_size=64,
         test_size=0.1,
         mask_ratio=0,
+        start_lr=2e-4,
     )
     data_loaders = mk_data_loaders_for_finetuning(train_cfg)
     model_cfg = cfg.ModelConfig(**checkpt_dict["model_cfg"])
@@ -49,12 +51,13 @@ def main():
         param.requires_grad = False
     criterion = metrics.SegmentationLoss(train_cfg)
     optimizer = training.mk_optimizer(model, train_cfg)
-    lr_scheduler = OneCycleLR(
-        optimizer,
-        train_cfg.max_lr,
-        epochs=train_cfg.n_epochs,
-        steps_per_epoch=len(data_loaders["train"]),
-    )
+    # lr_scheduler = OneCycleLR(
+    #     optimizer,
+    #     train_cfg.max_lr,
+    #     epochs=train_cfg.n_epochs,
+    #     steps_per_epoch=len(data_loaders["train"]),
+    # )
+    lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
     trainer = training.Trainer(
         model,
         train_cfg,

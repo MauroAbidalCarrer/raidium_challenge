@@ -79,7 +79,7 @@ def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray) -> float:
 
     return float(np.nanmean(cls_dices))
 
-class SegmentationLoss:
+class 2SegmentationLoss:
     def __init__(self, train_cfg: TrainingConfig):
         self.train_cfg = train_cfg
         weight = get_class_weights().to(DEVICE)

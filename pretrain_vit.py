@@ -51,7 +51,8 @@ def mk_trainer_from_scratch() -> training.Trainer:
     )
     model_cfg = cfg.ModelConfig(
         n_encoder_heads=8,
-        n_encoder_layers=4,
+        n_encoder_layers=8,
+        n_decoder_heads=8,
         compile=False,
     )
     # setup objects (no I didn't count the configs as objects...)

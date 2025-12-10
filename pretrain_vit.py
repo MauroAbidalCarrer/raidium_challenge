@@ -32,9 +32,10 @@ from src.plotting import plt_sample
 # - Switch to one cycle lr
 
 
+PRETRAIN_WANDB_CFG = cfg.WandbConfig(["pretraining", "MAE"], "pretraining")
 def main():
     if len(sys.argv) > 1:
-        trainer = training.Trainer.from_checkpoint(sys.argv[1])
+        trainer = training.Trainer.from_checkpoint(sys.argv[1], PRETRAIN_WANDB_CFG)
     else:
         trainer = mk_trainer_from_scratch()
     data_loaders = dataset.mk_semi_supervised_data_loaders(trainer.train_cfg)
@@ -65,7 +66,7 @@ def mk_trainer_from_scratch() -> training.Trainer:
         train_cfg,
         optimizer,
         lr_scheduler,
-        cfg.WandbConfig(["pretraining", "MAE"], "pretraining")
+        PRETRAIN_WANDB_CFG
     )
 
 

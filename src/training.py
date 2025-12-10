@@ -52,7 +52,7 @@ class Trainer:
         )
 
     @classmethod
-    def from_checkpoint(cls, path: str | Path):
+    def from_checkpoint(cls, path: str | Path, wandb_cfg: cfg.WandbConfig):
         print("Starting training from checkpoint:", path)
         chkpt = torch.load(path, weights_only=False)
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
@@ -60,7 +60,7 @@ class Trainer:
         model = models.MAE_ViT.from_config(model_cfg, print_params_count=True)
         optimizer = mk_optimizer(model, train_cfg)
         lr_sched = mk_lr_scheduler(train_cfg, optimizer)
-        trainer = cls(model, train_cfg, optimizer, lr_sched)
+        trainer = cls(model, train_cfg, optimizer, lr_sched, wandb_cfg)
         trainer.epoch = chkpt["epoch"]
         trainer.training_samples_seen = chkpt["training_samples_seen"]
         return trainer

@@ -38,6 +38,7 @@ class TrainingConfig:
     random_state: int = 0
     optim_cfg: OptimizerConfig=field(default_factory=OptimizerConfig)
     max_lr: float=1e-3
+    n_warmup_epochs: int = 50
     transform: v2.Transform = v2.Compose([
         # v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
         v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),

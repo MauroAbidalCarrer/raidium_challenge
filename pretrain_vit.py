@@ -27,7 +27,7 @@ from src.plotting import plt_sample
 
 
 # TODO:
-# - Add finetuning
+# - Add fback transforms
 # - Add submission creation and submit
 # - Switch to one cycle lr
 
@@ -45,6 +45,7 @@ def mk_trainer_from_scratch() -> training.Trainer:
     # setup configs
     train_cfg = cfg.TrainingConfig(
         max_lr=1e-3,
+        n_warmup_epochs=50,
         n_epochs=5000,
         batch_size=64,
     )

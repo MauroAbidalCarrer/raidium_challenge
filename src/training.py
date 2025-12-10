@@ -227,7 +227,7 @@ def wandb_log_dict_with_prefix(data: dict[str, Any], prefix: str, step: int):
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:
     def lr_func(epoch: int) -> float:
         return min(
-            (epoch + 1) / (train_cfg.n_epochs // 10 + 1e-8),
+            (epoch + 1) / (train_cfg.n_warmup_epochs // 10 + 1e-8),
             0.5 * (math.cos(epoch / train_cfg.n_epochs * math.pi) + 1)
         )
     return LambdaLR(optimizer, lr_lambda=lr_func)

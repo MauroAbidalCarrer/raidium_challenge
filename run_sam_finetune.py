@@ -29,7 +29,7 @@ from src import configs as cfg
 from src.plotting import plt_sample
 
 
-PRETRAINED_MODEL_ID = "facebook/sam-vit-base"
+PRETRAINED_MODEL_ID = "acebook/sam2-hiera-small"
 def main():
     dataset.mk_dataset(verbose=False)
     train_cfg = cfg.TrainingConfig(
@@ -41,6 +41,7 @@ def main():
         start_lr=1e-5,
     )
     model = SAMForSemanticSeg().to(cfg.DEVICE)
+    models.print_
     for name, param in model.named_parameters():
         if name.startswith("vision_encoder") or name.startswith("prompt_encoder"):
             param.requires_grad_(False)

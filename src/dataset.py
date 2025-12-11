@@ -1,6 +1,7 @@
 import os
 import shutil
 import zipfile
+from typing import Any
 from pathlib import Path
 
 import torch
@@ -9,9 +10,10 @@ import torchvision
 import numpy as np
 import pandas as pd
 from torch import Tensor
+from tensordict import TensorDict
 from torchvision import tv_tensors
 from torch.utils.data import DataLoader
-from torch.utils.data import TensorDataset
+from torch.utils.data import TensorDataset, StackDataset
 
 import src.configs as cfg
 from src.configs import TrainingConfig, DEVICE
@@ -88,19 +90,15 @@ def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
 MEAN: float = 14.0816
 STD: float = 35.2164
 
-def preprocess_imgs(x: Tensor) -> Tensor:
-    """
-    Processes an image to feed it to a model.
-    
-    :param x: raw image(s)
-    :type x: Tensor
-    :return: normalized image(s) in float32 on device.
-    :rtype: Tensor
-    """
-    return (x.to(device=DEVICE, dtype=torch.float) - MEAN) / STD
-
-def preprocess_y_true(y_true: Tensor) -> tv_tensors.Mask:
-    return tv_tensors.Mask(y_true).to(device=cfg.DEVICE, dtype=torch.long)
+def preprocess_batch(batch_dict: dict[str, Any]) -> dict[str, Any]:
+    x = batch_dict["x"]
+    x = x.to(device=DEVICE, dtype=torch.float)
+    batch_dict["x"] = (x - MEAN) / STD
+    batch_dict["y_true"] = (
+        tv_tensors.Mask(batch_dict["y_true"])
+        .to(device=cfg.DEVICE, dtype=torch.long)
+    )
+    return batch_dict
 
 def load_raw_dataset(device: torch.device) -> tuple[Tensor, Tensor, Tensor]:
     y_train: Tensor = torch.load("dataset/formatted/y-train.pt").to(device=device, dtype=torch.uint8)

@@ -13,7 +13,8 @@ def time_to_run(context_name: str):
     try:
         yield
     finally:
-        torch.cuda.synchronize()
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
         end = time()
         elapsed_time = end - start
         time_dict[context_name] = time_dict.get(context_name, 0) + elapsed_time

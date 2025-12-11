@@ -13,25 +13,29 @@ from torchvision import tv_tensors
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
 
+import src.configs as cfg
 from src.configs import TrainingConfig, DEVICE
 from sklearn.model_selection import train_test_split
 
 
-def get_data_loaders(
-        x_train: Tensor,
-        y_train: Tensor,
-        x_valid: Tensor,
-        y_valid: Tensor,
-        train_cfg: TrainingConfig,
-    ):
-    train_ds = TensorDataset(x_train.to(DEVICE), y_train.to(DEVICE))
-    valid_ds = TensorDataset(x_valid.to(DEVICE), y_valid.to(DEVICE))
-
-    train_loader = DataLoader(train_ds, batch_size=train_cfg.batch_size, shuffle=True)
-    valid_batch_size = int(np.clip(train_cfg.batch_size * 2, 1, 64))
-    valid_loader = DataLoader(valid_ds, batch_size=valid_batch_size, shuffle=False)
-
-    return train_loader, valid_loader
+def mk_data_loaders_for_finetuning(
+        train_cfg: cfg.TrainingConfig
+    ) -> dict[str, DataLoader]:
+    x_train, y_train, x_test = load_raw_dataset(cfg.DEVICE)
+    x_train, x_valid, y_train, y_valid = train_test_split(
+        x_train,
+        y_train,
+        test_size=train_cfg.test_size,
+    )
+    def mk_dl_from_tensors(*tensors: list[Tensor]) -> DataLoader:
+        dataset = TensorDataset(*tensors)
+        return DataLoader(dataset, train_cfg.batch_size)
+    y_test_fill = torch.zeros(len(x_test), 256, 256, device=cfg.DEVICE)
+    return {
+        "train": mk_dl_from_tensors(x_train, y_train),
+        "valid": mk_dl_from_tensors(x_valid, y_valid),
+        "test": mk_dl_from_tensors(x_test, y_test_fill),
+    }
 
 def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, DataLoader]:
     x_train, y_train, x_test = load_raw_dataset(DEVICE)

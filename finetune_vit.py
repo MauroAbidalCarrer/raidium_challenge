@@ -10,6 +10,7 @@ import torch
 import wandb
 import numpy as np
 from torch import nn, Tensor
+import torch.nn.functional as F
 from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
@@ -31,30 +32,25 @@ from src.plotting import plt_sample
 
 
 def main():
-    if len(sys.argv) <= 1:
+    if len(sys.argv) < 2:
         print("Please provide a path to a pretrained ViT checkpoint.")
+        exit(1)
     chkpt_pth = sys.argv[1]
     checkpt_dict = torch.load(chkpt_pth, weights_only=False)
-    train_cfg = cfg.TrainingConfig(
-        n_epochs=600,
-        batch_size=64,
-        test_size=0.1,
-        mask_ratio=0,
-    )
-    data_loaders = mk_data_loaders_for_finetuning(train_cfg)
+    train_cfg = cfg.TRAIN_CONFIGS["finetuning"]
+    data_loaders = dataset.mk_data_loaders_for_finetuning(train_cfg)
     model_cfg = cfg.ModelConfig(**checkpt_dict["model_cfg"])
     model = models.MAE_ViT.from_config(model_cfg)
     model.load_state_dict(checkpt_dict["model"])
     for param in model.encoder.parameters():
-        param.requires_grad = False
+        param.requires_grad_(False)
+    # model.decoder = models.MAE_DecoderBF(256, 16, 256, 8, num_head=8, out_channels=56).to(cfg.DEVICE)
+    # for param in model.decoder.head.parameters():
+    #     param.requires_grad_(True)
     criterion = metrics.SegmentationLoss(train_cfg)
+    # criterion = ClassWeightedMSE(1e-4)
     optimizer = training.mk_optimizer(model, train_cfg)
-    lr_scheduler = OneCycleLR(
-        optimizer,
-        train_cfg.max_lr,
-        epochs=train_cfg.n_epochs,
-        steps_per_epoch=len(data_loaders["train"]),
-    )
+    lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
     trainer = training.Trainer(
         model,
         train_cfg,
@@ -65,27 +61,8 @@ def main():
     trainer.train_model(
         data_loaders,
         criterion,
-        "checkpoints/finetuned/vit_epoch{epoch}.pt"
+        "checkpoints/finetuned/vit_epoch_{epoch}.pt"
     )
-
-def mk_data_loaders_for_finetuning(
-        train_cfg: cfg.TrainingConfig
-    ) -> dict[str, DataLoader]:
-    x_train, y_train, x_test = dataset.load_raw_dataset(cfg.DEVICE)
-    x_train, x_valid, y_train, y_valid = train_test_split(
-        x_train,
-        y_train,
-        test_size=train_cfg.test_size,
-    )
-    def mk_dl_from_tensors(*tensors: list[Tensor]) -> DataLoader:
-        dataset = TensorDataset(*tensors)
-        return DataLoader(dataset, train_cfg.batch_size)
-    y_test_fill = torch.zeros(len(x_test), 256, 256, device=cfg.DEVICE)
-    return {
-        "train": mk_dl_from_tensors(x_train, y_train),
-        "valid": mk_dl_from_tensors(x_valid, y_valid),
-        "test": mk_dl_from_tensors(x_test, y_test_fill),
-    }
 
 
 if __name__ == "__main__":

@@ -80,7 +80,7 @@ class Trainer:
         self.training_samples_seen = 0
         for _ in tqdm(range(self.epoch, self.train_cfg.n_epochs)):
             is_last_epoch = self.epoch == self.train_cfg.n_epochs - 1
-            if self.epoch % 100 == 0 or is_last_epoch:
+            if self.epoch % 50 == 0 or is_last_epoch:
                 with timing.time_to_run("evaluation/total"):
                     self.evaluate_model(data_loaders, criterion=criterion)
             with timing.time_to_run("training/total"):
@@ -121,8 +121,9 @@ class Trainer:
             with timing.time_to_run("training/get_batch and preprocess"):
                 x, y_true = next(batch_it)
                 x = dataset.preprocess_imgs(x)
+                y_true = dataset.preprocess_y_true(y_true)
                 if self.train_cfg.transform:
-                    x = self.train_cfg.transform(x)
+                    x, y_true = self.train_cfg.transform(x, y_true)
             with timing.time_to_run("training/step"):
                 step_dict = self.perform_training_step(x, y_true, criterion)
             with timing.time_to_run("training/epoch_dict_store_values"):
@@ -185,6 +186,7 @@ class Trainer:
         seg_y_true = []
         for batch_i, (x, y_true) in enumerate(data_loader):
             x = dataset.preprocess_imgs(x)
+            y_true = dataset.preprocess_y_true(y_true)
             with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
                 predicted_img, mask = self.model(x, self.train_cfg.mask_ratio)
                 loss_dict = criterion(x, predicted_img, mask, y_true)

@@ -1,3 +1,4 @@
+*.tif
 *.pt
 nohup*
 wandb/*

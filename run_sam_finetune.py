@@ -33,12 +33,14 @@ PRETRAINED_MODEL_ID = "facebook/sam-vit-base"
 def main():
     dataset.mk_dataset(verbose=False)
     train_cfg = cfg.TrainingConfig(
-        batch_size=16,
+        batch_size=4,
         n_epochs=10,
         test_size=0.1,
         cross_entropy_loss_weight=1,
         dice_loss_weight=2,
         start_lr=1e-5,
+        eval_interval=1,
+        chkpt_interval=1,
     )
     model = SAMForSemanticSeg(PRETRAINED_MODEL_ID).to(cfg.DEVICE)
     models.print_model_params_count(model)

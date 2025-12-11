@@ -23,7 +23,7 @@ def mk_data_loaders_for_finetuning(
     ) -> dict[str, DataLoader]:
     x_train, y_train, x_test = load_raw_dataset(cfg.DEVICE)
     sample_has_mask  = (y_train > 0).any(dim=(1, 2))
-    x_train = sample_has_mask[sample_has_mask]
+    x_train = x_train[sample_has_mask]
     y_train = y_train[sample_has_mask]
     x_train, x_valid, y_train, y_valid = train_test_split(
         x_train,

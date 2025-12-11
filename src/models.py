@@ -301,10 +301,13 @@ class MAE_ViT(nn.Module):
         ).to(cfg.DEVICE)
         model.cfg = model_cfg
         if print_params_count:
-            model_parameters = filter(lambda p: p.requires_grad, model.parameters())
-            params = sum([np.prod(p.size()) for p in model_parameters])
-            print("number of parameters:", str(params // 1e6) + "M")
-        return model
+            print_model_params_count(model)
+    
+def print_model_params_count(model: nn.Module):
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    print("number of parameters:", str(params // 1e6) + "M")
+    return model
 
 
 if __name__ == "__main__":

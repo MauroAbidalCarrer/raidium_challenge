@@ -29,7 +29,7 @@ from src import configs as cfg
 from src.plotting import plt_sample
 
 
-PRETRAINED_MODEL_ID = "acebook/sam2-hiera-small"
+PRETRAINED_MODEL_ID = "facebook/sam-vit-base"
 def main():
     dataset.mk_dataset(verbose=False)
     train_cfg = cfg.TrainingConfig(
@@ -40,8 +40,8 @@ def main():
         dice_loss_weight=2,
         start_lr=1e-5,
     )
-    model = SAMForSemanticSeg().to(cfg.DEVICE)
-    models.print_
+    model = SAMForSemanticSeg(PRETRAINED_MODEL_ID).to(cfg.DEVICE)
+    models.print_model_params_count(model)
     for name, param in model.named_parameters():
         if name.startswith("vision_encoder") or name.startswith("prompt_encoder"):
             param.requires_grad_(False)
@@ -63,9 +63,9 @@ def main():
     trainer.train_model(data_loaders, criterion, "checkpoints/SAM/sam_epoch_{epoch}.pt")
 
 class SAMForSemanticSeg(nn.Module):
-    def __init__(self, num_classes=55):
+    def __init__(self, pretrained_model_id: str, num_classes=55):
         super().__init__()
-        self.sam = SamModel.from_pretrained("facebook/sam-vit-base")
+        self.sam = SamModel.from_pretrained(pretrained_model_id)
         
         # Freeze the prompt encoders (optional)
         for p in self.sam.prompt_encoder.parameters():

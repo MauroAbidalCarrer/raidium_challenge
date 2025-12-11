@@ -40,7 +40,7 @@ def main():
         dice_loss_weight=2,
         start_lr=1e-5,
     )
-    model = SAMForSemanticSeg()
+    model = SAMForSemanticSeg().to(cfg.DEVICE)
     for name, param in model.named_parameters():
         if name.startswith("vision_encoder") or name.startswith("prompt_encoder"):
             param.requires_grad_(False)
@@ -92,13 +92,12 @@ class SAMForSemanticSeg(nn.Module):
 
         image_embeddings = self.sam.vision_encoder(x).last_hidden_state
 
-        print(image_embeddings.shape)
-        B, HW, C = image_embeddings.shape
-        H16 = W16 = int(HW**0.5)
-        feats = image_embeddings.transpose(1,2).reshape(B, C, H16, W16)
+        B, C, H, W = image_embeddings.shape
+        # H16 = W16 = int(HW**0.5)
+        # feats = image_embeddings.transpose(1,2).reshape(B, C, H16, W16)
 
-        logits = self.seg_head(feats)
-        logits = F.interpolate(logits, size=x.shape[-2:], mode="bilinear", align_corners=False)
+        logits = self.seg_head(image_embeddings)
+        logits = F.interpolate(logits, size=batch["x"].shape[-2:], mode="bilinear", align_corners=False)
         return {"y_pred": logits}
 
 

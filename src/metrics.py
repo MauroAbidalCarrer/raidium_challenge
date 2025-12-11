@@ -1,6 +1,6 @@
 import json
 import warnings
-from typing import Optional
+from typing import Optional, Any
 
 import torch
 import numpy as np
@@ -26,16 +26,10 @@ class SemiSupervisedLoss:
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=weight)
         self.train_cfg = train_cfg
 
-    def __call__(
-            self,
-            x: Tensor,
-            x_hat: Tensor,
-            mask: Tensor,
-            y_true: Tensor,
-        ) -> dict[str, Tensor]:
+    def __call__(self, forward_dict: dict[str, Any]) -> dict[str, Tensor]:
         # reconstruction loss
-        pix_wise_rec_loss = F.mse_loss(x_hat[:, 0], x[:, 0], reduction="none")
-        pix_wise_rec_loss = pix_wise_rec_loss * mask[:, 0] / self.train_cfg.mask_ratio
+        pix_wise_rec_loss = F.mse_loss(forward_dict["x_hat"], forward_dict["x"], reduction="none")
+        pix_wise_rec_loss = pix_wise_rec_loss * forward_dict["mask"][:, 0] / self.train_cfg.mask_ratio
         rec_loss = pix_wise_rec_loss.mean()
         return {
             "loss": rec_loss,
@@ -88,22 +82,15 @@ class SegmentationLoss:
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=class_weights)
         print("Going to apply class weights to dice loss.")
     
-    def __call__(
-            self,
-            x: Tensor,
-            x_hat: Tensor,
-            mask: Tensor,
-            y_true: Tensor,
-        ) -> dict[str, Tensor]:
+    def __call__(self, forward_dict: dict[str, Any]) -> dict[str, Tensor]:
         """
         Computes the weighted average of the cross entropy and dice loss of y pred.
         ### Returns:
         Dictionnary of loss_average, ce_loss and dice_loss
         """
-        y_true = y_true.long()
-        y_pred = x_hat[:, 1:]
-        ce_loss = self.cross_entropy_loss(y_pred, y_true)
-        dice_loss = torch_dice_loss(y_pred, y_true, self.class_weights)
+        y_true = forward_dict["y_true"].long()
+        ce_loss = self.cross_entropy_loss(forward_dict["y_pred"], y_true)
+        dice_loss = torch_dice_loss(forward_dict["y_pred"], y_true, self.class_weights)
         loss = dice_loss * self.train_cfg.dice_loss_weight \
             + ce_loss * self.train_cfg.cross_entropy_loss_weight
         return {

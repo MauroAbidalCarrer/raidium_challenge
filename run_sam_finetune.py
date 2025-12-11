@@ -10,12 +10,12 @@ from collections import defaultdict
 import torch
 import wandb
 import numpy as np
-import transformers 
 from scipy import ndimage
 from torch import nn, Tensor
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from torch.optim import Optimizer, AdamW
+from transformers import SamModel, SamProcessor
 from torch.utils.data import TensorDataset, DataLoader
 from torch.optim.lr_scheduler import LRScheduler, LambdaLR
 
@@ -45,7 +45,6 @@ def main():
     for name, param in model.named_parameters():
         if name.startswith("vision_encoder") or name.startswith("prompt_encoder"):
             param.requires_grad_(False)
-    model_cfg = 
     optimizer = AdamW(
         model.mask_decoder.parameters(),
         lr=train_cfg.start_lr,
@@ -62,7 +61,19 @@ def main():
         cfg.WandbConfig(["SAM", "finetuning"], "SAM")
     )
     trainer.train_model(data_loaders, criterion, "checkpoints/SAM/sam_epoch_{epoch}.pt")
+
+
+class SAMWrapper(nn.Module):
+    def __init__(self, model_id: str):
+        super().__init__()
+        self.wrapped_model = (
+            SamModel.from_pretrained(model_id)
+            .to(cfg.DEVICE)
+        )
+        self.processor = SamProcessor(model_id)
     
+    def forward(self, batch: dict[str, Tensor]) -> dict[str, Tensor]:
+        x = self.processor(batch["x"])
     
 if __name__ == "__main__":
     main()

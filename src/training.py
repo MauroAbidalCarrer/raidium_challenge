@@ -50,7 +50,7 @@ class Trainer:
         wandb_init(
             self.model,
             wandb_cfg,
-            self.model.cfg,
+            getattr(self.model, "cfg", {}),
             train_cfg,
         )
 

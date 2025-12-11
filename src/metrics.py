@@ -1,5 +1,6 @@
 import json
 import warnings
+from typing import Optional
 
 import torch
 import numpy as np
@@ -82,8 +83,10 @@ def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray) -> float:
 class SegmentationLoss:
     def __init__(self, train_cfg: TrainingConfig):
         self.train_cfg = train_cfg
-        weight = get_class_weights().to(DEVICE)
-        self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=weight)
+        class_weights = get_class_weights().to(DEVICE)
+        self.class_weights = class_weights
+        self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=class_weights)
+        print("Going to apply class weights to dice loss.")
     
     def __call__(
             self,
@@ -100,16 +103,16 @@ class SegmentationLoss:
         y_true = y_true.long()
         y_pred = x_hat[:, 1:]
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
-        base_d_loss = torch_dice_loss(y_pred, y_true)
-        loss = base_d_loss * self.train_cfg.dice_loss_weight \
+        dice_loss = torch_dice_loss(y_pred, y_true, self.class_weights)
+        loss = dice_loss * self.train_cfg.dice_loss_weight \
             + ce_loss * self.train_cfg.cross_entropy_loss_weight
         return {
             "loss": loss,
             "cross_entropy_loss": ce_loss,
-            "dice_loss": base_d_loss,
+            "dice_loss": dice_loss,
         }
 
-def torch_dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
+def torch_dice_loss(pred: Tensor, target: Tensor, class_weights: Optional[Tensor], smooth: float=1e-7) -> Tensor:
     pred = torch.softmax(pred, dim=1)
     target_one_hot = (
         torch.nn.functional.one_hot(
@@ -121,6 +124,8 @@ def torch_dice_loss(pred: Tensor, target: Tensor, smooth: float=1e-7) -> Tensor:
     intersection = (pred * target_one_hot).sum(dim=(2, 3))
     union = pred.sum(dim=(2, 3)) + target_one_hot.sum(dim=(2, 3))
     dice = (2. * intersection + smooth) / (union + smooth)
+    if class_weights is not None:
+        dice = dice * class_weights.unsqueeze(0)
     return 1 - dice.mean()
 
 

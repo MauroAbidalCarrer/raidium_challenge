@@ -40,10 +40,41 @@ class TrainingConfig:
     start_lr: float=2e-4
     max_lr: float=1e-3
     n_warmup_epochs: int = 50
-    transform: v2.Transform = v2.Compose([
-        # v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-        v2.RandomAffine(degrees=(-20, 20), translate=(0.1, 0.3), scale=(0.75, 2)),
-    ])
+    transform: v2.Transform = v2.Identity()
+
+TRAIN_CONFIGS = {
+    "pretraining": TrainingConfig(
+        max_lr=1e-3,
+        n_warmup_epochs=50,
+        batch_size=64,
+        n_epochs=5000,
+        transform=v2.RandomAffine(
+            degrees=(-20, 20),
+            translate=(0.1, 0.3),
+            scale=(0.75, 2),
+        )
+    ),
+    "finetuning": TrainingConfig(
+        start_lr=2e-4,
+        batch_size=64,
+        n_epochs=600,
+        dice_loss_weight = 2,
+        cross_entropy_loss_weight= 1,
+        mask_ratio = 0,
+        transform=v2.Compose([
+            v2.RandomErasing(ratio=(0.05, 0.15)),
+            v2.RandomErasing(ratio=(0.05, 0.15)),
+            v2.RandomErasing(ratio=(0.05, 0.15)),
+            v2.RandomAffine(
+                degrees=(-20, 20),
+                translate=(0.1, 0.3),
+                scale=(0.75, 2),
+            ),
+            v2.RandomErasing(ratio=(0.05, 0.15), value="random"),
+            v2.RandomErasing(ratio=(0.05, 0.15), value="random"),
+        ])
+    )
+}
 
 @dataclass
 class WandbConfig:

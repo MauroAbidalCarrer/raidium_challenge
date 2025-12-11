@@ -44,11 +44,7 @@ def main():
 
 def mk_trainer_from_scratch() -> training.Trainer:
     # setup configs
-    train_cfg = cfg.TrainingConfig(
-        max_lr=1e-3,
-        n_warmup_epochs=50,
-        batch_size=64,
-    )
+    train_cfg = cfg.TRAIN_CONFIGS["pretrain"]
     model_cfg = cfg.ModelConfig(
         n_encoder_heads=8,
         n_encoder_layers=8,

@@ -46,13 +46,16 @@ def main():
         cross_entropy_loss_weight=2,
         dice_loss_weight=0.1,
     )
-    data_loaders = mk_data_loaders_for_finetuning(train_cfg)
+    data_loaders = dataset.mk_data_loaders_for_finetuning(train_cfg)
     model_cfg = cfg.ModelConfig(**checkpt_dict["model_cfg"])
     model = models.MAE_ViT.from_config(model_cfg)
     model.load_state_dict(checkpt_dict["model"])
-    for param in model.encoder.parameters():
-        param.requires_grad = False
-    criterion = ClassWeightedMSE(1e-4)
+    for param in model.parameters():
+        param.requires_grad_(False)
+    for param in model.decoder.head.parameters():
+        param.requires_grad_(True)
+    criterion = metrics.SegmentationLoss(train_cfg)
+    # criterion = ClassWeightedMSE(1e-4)
     optimizer = training.mk_optimizer(model, train_cfg)
     lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
     trainer = training.Trainer(
@@ -94,25 +97,6 @@ class ClassWeightedMSE:
         img_reduced_mse = img_reduced_mse * self.class_weights # B, C
         mse = img_reduced_mse.mean()
         return mse
-
-def mk_data_loaders_for_finetuning(
-        train_cfg: cfg.TrainingConfig
-    ) -> dict[str, DataLoader]:
-    x_train, y_train, x_test = dataset.load_raw_dataset(cfg.DEVICE)
-    x_train, x_valid, y_train, y_valid = train_test_split(
-        x_train,
-        y_train,
-        test_size=train_cfg.test_size,
-    )
-    def mk_dl_from_tensors(*tensors: list[Tensor]) -> DataLoader:
-        dataset = TensorDataset(*tensors)
-        return DataLoader(dataset, train_cfg.batch_size)
-    y_test_fill = torch.zeros(len(x_test), 256, 256, device=cfg.DEVICE)
-    return {
-        "train": mk_dl_from_tensors(x_train, y_train),
-        "valid": mk_dl_from_tensors(x_valid, y_valid),
-        "test": mk_dl_from_tensors(x_test, y_test_fill),
-    }
 
 
 if __name__ == "__main__":

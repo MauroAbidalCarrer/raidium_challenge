@@ -42,8 +42,8 @@ def main():
     model_cfg = cfg.ModelConfig(**checkpt_dict["model_cfg"])
     model = models.MAE_ViT.from_config(model_cfg)
     model.load_state_dict(checkpt_dict["model"])
-    for param in model.encoder.parameters():
-        param.requires_grad_(False)
+    # for param in model.encoder.parameters():
+    #     param.requires_grad_(False)
     # model.decoder = models.MAE_DecoderBF(256, 16, 256, 8, num_head=8, out_channels=56).to(cfg.DEVICE)
     # for param in model.decoder.head.parameters():
     #     param.requires_grad_(True)

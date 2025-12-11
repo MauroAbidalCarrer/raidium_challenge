@@ -77,10 +77,9 @@ class Trainer:
             criterion: cfg.criterion_t,
             chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
-        self.training_samples_seen = 0
         for _ in tqdm(range(self.epoch, self.train_cfg.n_epochs)):
             is_last_epoch = self.epoch == self.train_cfg.n_epochs - 1
-            if self.epoch % 50 == 0 or is_last_epoch:
+            if self.epoch % self.train_cfg.eval_interval == 0 or is_last_epoch:
                 with timing.time_to_run("evaluation/total"):
                     self.evaluate_model(data_loaders, criterion=criterion)
             with timing.time_to_run("training/total"):
@@ -88,7 +87,8 @@ class Trainer:
             wandb_log_dict_with_prefix(training_dict, "training", self.epoch)
             if self.epoch % 10 == 0 or is_last_epoch:
                 timing.print_time_dict()
-            if (self.epoch % 100 == 0 and self.epoch != 0) or is_last_epoch:
+            at_chkpt_interval = self.epoch % self.train_cfg.chkpt_interval == 0
+            if (at_chkpt_interval and self.epoch != 0) or is_last_epoch:
                 self.save_checkpoint(chkpt_pth_format)
             self.epoch += 1
 

@@ -41,6 +41,8 @@ class TrainingConfig:
     max_lr: float=1e-3
     n_warmup_epochs: int = 50
     transform: v2.Transform = v2.Identity()
+    eval_interval: int = 100
+    chkpt_interval:  int = 100
 
 TRAIN_CONFIGS = {
     "pretraining": TrainingConfig(
@@ -55,24 +57,26 @@ TRAIN_CONFIGS = {
         )
     ),
     "finetuning": TrainingConfig(
-        start_lr=2e-4,
+        start_lr=1e-3,
         batch_size=64,
-        n_epochs=600,
-        dice_loss_weight = 2,
+        n_epochs=100,
+        dice_loss_weight = 4,
         cross_entropy_loss_weight= 1,
         mask_ratio = 0,
         transform=v2.Compose([
-            v2.RandomErasing(ratio=(0.05, 0.15)),
-            v2.RandomErasing(ratio=(0.05, 0.15)),
-            v2.RandomErasing(ratio=(0.05, 0.15)),
+            v2.RandomErasing(scale=(0.1, 0.2), value="random"),
+            v2.RandomErasing(scale=(0.1, 0.2), value="random"),
+            v2.RandomErasing(scale=(0.1, 0.2), value="random"),
             v2.RandomAffine(
                 degrees=(-20, 20),
                 translate=(0.1, 0.3),
                 scale=(0.75, 2),
             ),
-            v2.RandomErasing(ratio=(0.05, 0.15), value="random"),
-            v2.RandomErasing(ratio=(0.05, 0.15), value="random"),
-        ])
+            v2.RandomErasing(scale=(0.1, 0.2), value="random"),
+            v2.RandomErasing(scale=(0.1, 0.2), value="random"),
+        ]),
+        eval_interval=20,
+        chkpt_interval=20,
     )
 }
 

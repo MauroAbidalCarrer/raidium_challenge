@@ -99,6 +99,9 @@ def preprocess_imgs(x: Tensor) -> Tensor:
     """
     return (x.to(device=DEVICE, dtype=torch.float) - MEAN) / STD
 
+def preprocess_y_true(y_true: Tensor) -> tv_tensors.Mask:
+    return tv_tensors.Mask(y_true).to(device=cfg.DEVICE, dtype=torch.long)
+
 def load_raw_dataset(device: torch.device) -> tuple[Tensor, Tensor, Tensor]:
     y_train: Tensor = torch.load("dataset/formatted/y-train.pt").to(device=device, dtype=torch.uint8)
     x_train = torch.load("dataset/formatted/x-train.pt").to(device=device, dtype=torch.uint8)

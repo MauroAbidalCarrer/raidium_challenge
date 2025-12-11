@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from torch import nn, Tensor
 import matplotlib.pyplot as plt
+from torchvision.transforms import v2
 
 from src import dataset
 
@@ -51,6 +52,7 @@ def plt_model_preds(
         data_loader: torch.utils.data.DataLoader,
         plt_recon: bool=True,
         mask_ratio=0.75,
+        transform: Optional[v2.Transform]=None,
     ):
     """Plots the model's reconstruction and segmentation."""
     model.eval()
@@ -62,6 +64,10 @@ def plt_model_preds(
         y_true = y_true[sample_has_seg]
     x = dataset.preprocess_imgs(x)
     x = x[:N_IMGS_TO_PLT]
+    y_true = dataset.preprocess_y_true(y_true)
+    if transform is not None:
+        x, y_true = transform(x, y_true)
+    
     x_hat, mask = model(x, mask_ratio)
     x_hat_img = x_hat[:, :1]
     mask = mask[:, :1]

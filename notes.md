@@ -14,15 +14,12 @@ ideas:
     - save checkpoint as artifact on wandb
 
 todo:
-- fix training:
-    - make sure we can restart training from checkpoint(kinda done)
-    - understand why we get a better validation dice score when restarting training from a checkpoint
-    - ideally save checkpoint on wandb
 - in parallel:
     - Get better score with unet:
         - add gaussian blur
         - decrease test size
         - train for longer from checkpoint
+        - balance classes
     - TTA
     - ViT pretraining with downscaled image
 at the end of the competion:
@@ -52,3 +49,7 @@ submissions:
 <!-- - speed up data aug by using torchvision.tranform.v2 -->
 <!-- - use torch compile -->
 <!-- - save checkpoint  -->
+
+<!-- - fix training:
+    - make sure we can restart training from checkpoint(kinda done)
+    - understand why we get a different validation dice score when restarting training from a checkpoint -->

@@ -78,13 +78,7 @@ class Trainer:
             criterion: cfg.criterion_t,
             chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
-        print("epochs to train for:", self.epoch - self.cfg.n_epochs)
-        print("step:", self.step)
-        print("epoch:", self.epoch)
         beta_norm = 0
-        for group in self.optimizer.param_groups:
-            beta_norm += torch.linalg.norm(group['betas'])
-        print("optim beta norm:", beta_norm)
         for _ in tqdm(range(self.epoch, self.cfg.n_epochs)):
             is_last_epoch = self.epoch == self.cfg.n_epochs - 1
             if self.epoch % 50 == 0 or is_last_epoch:
@@ -95,9 +89,8 @@ class Trainer:
             wandb_log_dict_with_prefix(training_dict, "training", self.epoch)
             if self.epoch % 50 == 0 or is_last_epoch:
                 timing.print_time_dict()
-            # if (self.epoch % 50 == 0 and self.epoch != 0) or is_last_epoch:
-            #     self.save_checkpoint(chkpt_pth_format)
-            self.save_checkpoint(chkpt_pth_format)
+            if (self.epoch % 50 == 0 and self.epoch != 0) or is_last_epoch:
+                self.save_checkpoint(chkpt_pth_format)
             self.epoch += 1
 
     def save_checkpoint(self, chkpt_pth_format: str):
@@ -112,7 +105,6 @@ class Trainer:
             "step": self.step,
             "epoch": self.epoch,
             "training_samples_seen": self.training_samples_seen,
-            "wandb_run_id": wandb
         }
         pth = chkpt_pth_format.format(epoch=self.epoch)
         dir_path = os.path.dirname(pth)

@@ -12,8 +12,8 @@ def main():
     wandb_cfg = cfg.WandbConfig(["unet", "segmentation"], "unet")
     if len(sys.argv) > 1:
         chkpt = torch.load(sys.argv[1], weights_only=False)
-        train_cfg = chkpt["train_cfg"]
-        model_cfg = chkpt["model_cfg"]
+        train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
+        model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
         model = models.mk_unet(model_cfg)
         model.load_state_dict(chkpt["model"])
         model.cfg = model_cfg
@@ -38,6 +38,13 @@ def main():
         lr_scheduler,
         wandb_cfg
     )
+    if len(sys.argv) > 1:
+        print("setting epoch, step and training samples seen")
+        n_samples = len(data_loaders["train"])
+        samples_seen = chkpt["training_samples_seen"]
+        trainer.training_samples_seen = samples_seen
+        trainer.epoch = chkpt.get("epoch", int(samples_seen // n_samples))
+        trainer.step = chkpt.get("step", int(samples_seen // train_cfg.batch_size))
     trainer.train_model(
         data_loaders,
         criterion,

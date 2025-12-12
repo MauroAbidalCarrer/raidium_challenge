@@ -38,7 +38,7 @@ class Trainer:
             wandb_cfg: cfg.WandbConfig,
         ):
         self.model = model
-        self.train_cfg = train_cfg
+        self.cfg = train_cfg
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
         self.step = 0
@@ -78,8 +78,15 @@ class Trainer:
             criterion: cfg.criterion_t,
             chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
-        for _ in tqdm(range(self.epoch, self.train_cfg.n_epochs)):
-            is_last_epoch = self.epoch == self.train_cfg.n_epochs - 1
+        print("epochs to train for:", self.epoch - self.cfg.n_epochs)
+        print("step:", self.step)
+        print("epoch:", self.epoch)
+        beta_norm = 0
+        for group in self.optimizer.param_groups:
+            beta_norm += torch.linalg.norm(group['betas'])
+        print("optim beta norm:", beta_norm)
+        for _ in tqdm(range(self.epoch, self.cfg.n_epochs)):
+            is_last_epoch = self.epoch == self.cfg.n_epochs - 1
             if self.epoch % 50 == 0 or is_last_epoch:
                 with timing.time_to_run("evaluation/total"):
                     self.evaluate_model(data_loaders, criterion=criterion)
@@ -88,15 +95,16 @@ class Trainer:
             wandb_log_dict_with_prefix(training_dict, "training", self.epoch)
             if self.epoch % 50 == 0 or is_last_epoch:
                 timing.print_time_dict()
-            if (self.epoch % 50 == 0 and self.epoch != 0) or is_last_epoch:
-                self.save_checkpoint(chkpt_pth_format)
+            # if (self.epoch % 50 == 0 and self.epoch != 0) or is_last_epoch:
+            #     self.save_checkpoint(chkpt_pth_format)
+            self.save_checkpoint(chkpt_pth_format)
             self.epoch += 1
 
     def save_checkpoint(self, chkpt_pth_format: str):
         chkpt_dict = {
             "model": self.model.state_dict(),
             "model_cfg": vars(self.model.cfg),
-            "train_cfg": vars(self.train_cfg),
+            "train_cfg": vars(self.cfg),
             "optimizer": self.optimizer.state_dict(),
             "lr_scheduler": self.lr_scheduler.state_dict(),
             "lr_scheduler_cfg": getattr(self.lr_scheduler, "cfg", None),
@@ -134,7 +142,7 @@ class Trainer:
         epoch_dict["training_samples_seen"] = self.training_samples_seen
         epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         # TODO: Check if this shouldn't get called per step instead of per epoch.
-        self.step += 1
+        self.epoch += 1
         return epoch_dict
 
     def perform_training_step(
@@ -142,8 +150,8 @@ class Trainer:
             batch_dict: dict[str, Any],
             criterion: cfg.criterion_t,
         ) -> dict[str, Tensor]:
-        if self.train_cfg.transform:
-            batch_dict["x"], batch_dict["y_true"] = self.train_cfg.transform(
+        if self.cfg.transform:
+            batch_dict["x"], batch_dict["y_true"] = self.cfg.transform(
                 batch_dict["x"],
                 batch_dict["y_true"],
             )
@@ -162,6 +170,7 @@ class Trainer:
         self.optimizer.step()
         self.training_samples_seen += len(batch_dict["x"])
         self.lr_scheduler.step()
+        self.step += 1
         return {**loss_dict, "loss_norm": loss_norm}
 
     @torch.no_grad

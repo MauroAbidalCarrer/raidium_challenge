@@ -43,6 +43,7 @@ class TrainingConfig:
     max_lr: float=1e-3
     n_warmup_epochs: int = 50
     transform: v2.Transform = v2.Identity()
+    use_cls_weights_for_dice: bool = False
 
 TRAIN_CONFIGS = {
     "pretraining": TrainingConfig(

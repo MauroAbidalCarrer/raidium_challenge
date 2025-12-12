@@ -26,6 +26,16 @@ todo:
     - TTA
     - ViT pretraining with downscaled image
 at the end of the competion:
+
+submissions:
+- today:
+    - high score unet
+    - unet with blur+balanced sampling
+    - unet TTA
+- tomorrow:
+    - downscaled vit?
+    - unet or vit TTA
+
 - make the repo veeeeeeeery clean, so I can flex it to everyone
     - create a second repo and delete this one?
     - Try to use monai loss/metrics when possible to reduce code base size.

@@ -1,17 +1,19 @@
-from __future__ import annotations
 from itertools import repeat
-from typing import Tuple, Optional
+from __future__ import annotations
+from typing import Tuple, Optional, Any
 
 import torch
 import numpy as np
 from torch import Tensor, nn
 from einops import rearrange
+from torch.nn import functional as F
 from monai.networks.nets import UNet
 from einops.layers.torch import Rearrange
 from timm.models.layers import trunc_normal_
 from timm.models.vision_transformer import Block
 
 import src.configs as cfg
+
 
 def gather_batch(x: Tensor, idx: Tensor) -> Tensor:
     """
@@ -24,7 +26,6 @@ def gather_batch(x: Tensor, idx: Tensor) -> Tensor:
     _, T_idx = idx.shape
     idx_exp = idx.unsqueeze(-1).expand(-1, -1, C)  # (B, T_idx, C)
     return torch.gather(x, dim=1, index=idx_exp)
-
 
 class PatchShuffleBF(nn.Module):
     """
@@ -304,6 +305,21 @@ class MAE_ViT(nn.Module):
             print("number of parameters:", str(params // 1e6) + "M")
         return model
 
+class DownScaledViT(MAE_ViT):
+
+    def __init__(self, downscaling: int = 2, **mae_vit_kwargs):
+        self.downscaling = downscaling
+        super().__init__(**mae_vit_kwargs)
+    
+    def forward(self, batch_dict: dict[str, Any]) -> dict[str, Tensor]:
+        batch_dict["x"] = F.max_pool2d(batch_dict["x"], self.downscaling, self.downscaling)
+        output_dict = super().forward(batch_dict)
+        output_dict["y_pred"] = F.interpolate(
+            output_dict["y_pred"], 
+            (output_dict["y_pred"].shape[0], 256, 256),
+        )
+        return output_dict
+
 def mk_unet(model_cfg: cfg.ModelConfig) -> nn.Module:
     kwargs = model_cfg.constructor_kwargs
     channels = kwargs["channels"]
@@ -316,11 +332,6 @@ def mk_unet(model_cfg: cfg.ModelConfig) -> nn.Module:
             strides=tuple(repeat(2, len(channels) - 1)),
             bias=True,
             **kwargs,
-            # channels=channels,
-            # num_res_units=model_cfg.num_res_units,
-            # act=model_cfg.act,
-            # norm=model_cfg.norm,
-            # dropout=model_cfg.dropout,
         )
         .to(cfg.DEVICE)
     )

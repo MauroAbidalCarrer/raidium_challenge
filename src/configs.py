@@ -58,6 +58,16 @@ TRAIN_CONFIGS = {
             scale=(0.75, 2),
         )
     ),
+    "downscaled_pretraining": TrainingConfig(
+        batch_size=64,
+        n_epochs=5000,
+        transform=v2.RandomAffine(
+            degrees=(-20, 20),
+            translate=(0.1, 0.3),
+            scale=(0.75, 2),
+        ),
+
+    ),
     "finetuning": TrainingConfig(
         batch_size=64,
         n_epochs=600,
@@ -116,6 +126,15 @@ class ModelConfig:
     compile: bool = True
 
 DFLT_MODELS_CFGS = {
+    "unet": ModelConfig(
+        architecutre="unet",
+        constructor_kwargs={
+            "channels": (64, 128, 256, 512),
+            "num_res_units": 2,
+            "act": ("leakyrelu", {"negative_slope": 0.01}),
+            "norm": "instance",
+        }
+    ),
     "unet": ModelConfig(
         architecutre="unet",
         constructor_kwargs={

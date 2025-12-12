@@ -11,7 +11,7 @@ def main():
     wandb_cfg = cfg.WandbConfig(["unet", "segmentation"], "unet")
     model_cfg = cfg.DFLT_MODELS_CFGS["unet"]
     model = models.mk_unet(model_cfg)
-    optimizer = training.mk_optimizer(model, train_cfg)
+    optimizer = training.mk_optimizer(model, cfg.OPTIMIZER_CFGS["unet"])
     lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
     criterion = metrics.SegmentationLoss(train_cfg)
     data_loaders = dataset.mk_data_loaders_for_segmentation(train_cfg)

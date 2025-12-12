@@ -248,10 +248,10 @@ def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRSc
     # )
     return ConstantLR(optimizer, factor=1)
 
-def mk_optimizer(model: nn.Module, train_cfg: cfg.TrainingConfig) -> Optimizer:
+def mk_optimizer(model: nn.Module, optimizer_cfg: cfg.OptimizerConfig) -> Optimizer:
     return torch.optim.AdamW(
         model.parameters(),
         # TODO: Understand the scaling of the max_lr
-        lr=train_cfg.start_lr,
-        betas=(0.9, 0.95),
+        lr=optimizer_cfg.starting_lr,
+        betas=(optimizer_cfg.beta0, optimizer_cfg.beta1),
     )

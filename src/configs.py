@@ -37,9 +37,9 @@ class TrainingConfig:
     rec_loss_weight: float = 1
     mask_ratio: float = 0.75
     random_state: int = 0
-    optim_cfg: OptimizerConfig=field(default_factory=OptimizerConfig)
+    # optim_cfg: OptimizerConfig=field(default_factory=OptimizerConfig)
     #TODO: Remove start lr and other optimizer values in train cfg and move them to appropriate cfg classes
-    start_lr: float=2e-4
+    # start_lr: float=2e-4
     max_lr: float=1e-3
     n_warmup_epochs: int = 50
     transform: v2.Transform = v2.Identity()
@@ -47,7 +47,7 @@ class TrainingConfig:
 
 TRAIN_CONFIGS = {
     "pretraining": TrainingConfig(
-        max_lr=1e-3,
+        # max_lr=1e-3,
         n_warmup_epochs=50,
         batch_size=64,
         n_epochs=5000,
@@ -58,7 +58,6 @@ TRAIN_CONFIGS = {
         )
     ),
     "finetuning": TrainingConfig(
-        start_lr=2e-4,
         batch_size=64,
         n_epochs=600,
         dice_loss_weight = 2,
@@ -75,16 +74,17 @@ TRAIN_CONFIGS = {
             ),
             v2.RandomErasing(ratio=(0.05, 0.15), value="random"),
             v2.RandomErasing(ratio=(0.05, 0.15), value="random"),
-        ])
+        ]),
+        # optim_cfg=OptimizerConfig(OPTIMIZER_CFGS=2e-4)
     ),
     "unet_training": TrainingConfig(
-        start_lr=5e-4,
         batch_size=128,
-        n_epochs=600,
+        n_epochs=2000,
         dice_loss_weight = 2,
         cross_entropy_loss_weight= 1,
         mask_ratio = 0,
         transform = v2.Compose([
+            v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
             v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
             v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
@@ -95,8 +95,11 @@ TRAIN_CONFIGS = {
             v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
             v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
         ]),
-        optim_cfg=OptimizerConfig(starting_lr=5e-4)
     )
+}
+
+OPTIMIZER_CFGS = {
+    "unet": OptimizerConfig(starting_lr=5e-4),
 }
 
 @dataclass

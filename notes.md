@@ -14,7 +14,7 @@ ideas:
     - save checkpoint as artifact on wandb
 
 todo:
-
+- Get better score with unet
 at the end of the competion:
 - make the repo veeeeeeeery clean, so I can flex it to everyone
     - create a second repo and delete this one?

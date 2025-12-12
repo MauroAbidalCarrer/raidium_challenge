@@ -1,8 +1,8 @@
 import os
 import math
 from tqdm import tqdm
-from typing import Any
 from pathlib import Path
+from typing import Any, Optional
 from collections import defaultdict
 
 import torch
@@ -99,9 +99,12 @@ class Trainer:
             "train_cfg": vars(self.train_cfg),
             "optimizer": self.optimizer.state_dict(),
             "lr_scheduler": self.lr_scheduler.state_dict(),
+            "lr_scheduler_cfg": getattr(self.lr_scheduler, "cfg", None),
+            "optimizer_cfg": getattr(self.optimizer.state_dict(), "cfg", None),
             "step": self.step,
             "epoch": self.epoch,
             "training_samples_seen": self.training_samples_seen,
+            "wandb_run_id": wandb
         }
         pth = chkpt_pth_format.format(epoch=self.epoch)
         dir_path = os.path.dirname(pth)

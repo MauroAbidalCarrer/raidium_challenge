@@ -1,7 +1,5 @@
 import os
-import math
 from tqdm import tqdm
-from pathlib import Path
 from typing import Any, Optional
 from collections import defaultdict
 
@@ -9,12 +7,11 @@ import torch
 import wandb
 import numpy as np
 from torch import nn, Tensor
+from rich.progress import track
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import (
     LRScheduler,
-    OneCycleLR,
-    LambdaLR,
     ConstantLR
 )
 
@@ -23,7 +20,6 @@ from src import (
     metrics,
     timing,
     utils,
-    models,
 )
 from src import configs as cfg
 
@@ -35,7 +31,7 @@ class Trainer:
             train_cfg: cfg.TrainingConfig,
             optimizer: torch.optim.Optimizer,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
-            wandb_cfg: cfg.WandbConfig,
+            wandb_run: wandb.Run,
         ):
         self.model = model
         self.cfg = train_cfg
@@ -44,16 +40,10 @@ class Trainer:
         self.step = 0
         self.epoch = 0
         self.training_samples_seen = 0
+        self.wandb_run = wandb_run
         dataset.mk_dataset(verbose=False)
         torch.backends.cuda.matmul.fp32_precision = 'ieee'
         utils.setup_seed(train_cfg.random_state)
-        # Initilaze weights and biases run
-        wandb_init(
-            self.model,
-            wandb_cfg,
-            self.model.cfg,
-            train_cfg,
-        )
 
     def train_model(
             self,
@@ -61,20 +51,18 @@ class Trainer:
             criterion: cfg.criterion_t,
             chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
-        beta_norm = 0
-        for _ in tqdm(range(self.epoch, self.cfg.n_epochs)):
+        for _ in track(range(self.epoch, self.cfg.n_epochs), description="Training model"):
             is_last_epoch = self.epoch == self.cfg.n_epochs - 1
             if self.epoch % 50 == 0 or is_last_epoch:
                 with timing.time_to_run("evaluation/total"):
                     self.evaluate_model(data_loaders, criterion=criterion)
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
-            wandb_log_dict_with_prefix(training_dict, "training", self.epoch)
+                self.wandb_log_dict_with_prefix(training_dict, "training")
             if self.epoch % 50 == 0 or is_last_epoch:
                 timing.print_time_dict()
-            if (self.epoch % 50 == 0 and self.epoch != 0) or is_last_epoch:
+            if (self.epoch % 5 == 0 and self.epoch != 0) or is_last_epoch:
                 self.save_checkpoint(chkpt_pth_format)
-            self.epoch += 1
 
     def save_checkpoint(self, chkpt_pth_format: str):
         chkpt_dict = {
@@ -89,13 +77,23 @@ class Trainer:
             "epoch": self.epoch,
             "training_samples_seen": self.training_samples_seen,
         }
-        pth = chkpt_pth_format.format(epoch=self.epoch)
+        pth = chkpt_pth_format.format(epoch=self.epoch, wandb_run_name=self.wandb_run.name)
         dir_path = os.path.dirname(pth)
         if dir_path:  # handle case where pth has no directory component
             os.makedirs(dir_path, exist_ok=True)
         # Save checkpoint
         torch.save(chkpt_dict, pth)
-        print("Saved checkpoint at", pth)
+        # create wandb artifact
+        artifact_name = f"checkpoint-epoch-{self.epoch}"
+        artifact = wandb.Artifact(
+            name=artifact_name,
+            type="model",
+        )
+        # add file to artifact
+        artifact.add_file(pth)
+        # log artifact to run
+        self.wandb_run.log_artifact(artifact, artifact_name)
+        print("Uploaded checkpoint as artifact", artifact_name, "and to", pth)
 
     def train_model_for_single_epoch(
             self,
@@ -151,7 +149,6 @@ class Trainer:
     @torch.no_grad
     def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: cfg.criterion_t):
         """
-        Plots the reconstruction and segmentation of masked batches from all splits.
         Evaluates the reconstruction and seg losses of validation split in eval mode.
         Evaluates the seg losses of validation split in inference mode.
         Evaluates the recon of test split in eval mode.
@@ -160,9 +157,9 @@ class Trainer:
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
         test_infer_dict  = self.evaluate_model_on_single_split(data_loaders["test"],  criterion)
         valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
-        wandb_log_dict_with_prefix(valid_eval_dict, "validation", self.epoch)
-        wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test",  self.epoch)
-        wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid", self.epoch)
+        self.wandb_log_dict_with_prefix(valid_eval_dict, "validation")
+        self.wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test")
+        self.wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid")
 
     @torch.no_grad
     def evaluate_model_on_single_split(
@@ -200,27 +197,34 @@ class Trainer:
             eval_dict["dice_score"] = metrics.dice_pandas(seg_y_true, seg_preds)
         return eval_dict
 
+    def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
+        data_with_prefix = {prefix + "/" + k: v for k, v in data.items()}
+        trainer_data = {
+            "training/epoch": self.epoch,
+            "training/step": self.step,
+            "training/traing_samples_seen": self.training_samples_seen,
+            # for backward compatibility with legacy code
+            "training/samples_seen": self.training_samples_seen, 
+        }
+        wandb.log(
+            data=data_with_prefix | trainer_data,
+            step=self.step,
+        )
+
+
 def wandb_init(
-        model: nn.Module,
-        wandb_cfg: cfg.WandbConfig,
         *configs: list[Any],
-    ):
+        tags: Optional[list[str]]=[],
+        group: Optional[str]=None
+    ) -> wandb.Run:
     cfg_vars = {}
     for cfg in configs:
         cfg_vars |= vars(cfg)
-    wandb.init(
+    return wandb.init(
         project="raidium-challenge",
-        config={
-            **cfg_vars,
-            "model_class": type(model).__class__,
-        },
-        **vars(wandb_cfg),
-    )
-
-def wandb_log_dict_with_prefix(data: dict[str, Any], prefix: str, step: int):
-    wandb.log(
-        data={prefix + "/" + k: v for k, v in data.items()},
-        step=step,
+        config={**cfg_vars,},
+        tags=tags,
+        group=group,
     )
     
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:

@@ -30,6 +30,7 @@ def mk_data_loaders_for_segmentation(
         x_train,
         y_train,
         test_size=train_cfg.test_size,
+        random_state=train_cfg.random_state,
     )
     def mk_dl_from_tensors(*tensors: list[Tensor]) -> DataLoader:
         dataset = TensorDataset(*tensors)

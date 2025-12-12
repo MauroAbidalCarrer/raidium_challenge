@@ -40,10 +40,11 @@ def main():
     )
     if len(sys.argv) > 1:
         print("setting epoch, step and training samples seen")
-        n_samples = len(data_loaders["train"])
+        n_btaches_per_epoch = len(data_loaders["train"])
         samples_seen = chkpt["training_samples_seen"]
         trainer.training_samples_seen = samples_seen
-        trainer.epoch = chkpt.get("epoch", int(samples_seen // n_samples))
+        n_samples_per_epoch = n_btaches_per_epoch * train_cfg.batch_size
+        trainer.epoch = chkpt.get("epoch", int(samples_seen // n_samples_per_epoch))
         trainer.step = chkpt.get("step", int(samples_seen // train_cfg.batch_size))
     trainer.train_model(
         data_loaders,

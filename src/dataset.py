@@ -18,7 +18,7 @@ from src.configs import TrainingConfig, DEVICE
 from sklearn.model_selection import train_test_split
 
 
-def mk_data_loaders_for_finetuning(
+def mk_data_loaders_for_segmentation(
         train_cfg: cfg.TrainingConfig
     ) -> dict[str, DataLoader]:
     x_train, y_train, x_test = load_raw_dataset(cfg.DEVICE)

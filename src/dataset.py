@@ -11,8 +11,12 @@ import numpy as np
 import pandas as pd
 from torch import Tensor
 from torchvision import tv_tensors
-from torch.utils.data import DataLoader
-from torch.utils.data import TensorDataset
+from torch.utils.data import (
+    DataLoader,
+    TensorDataset,
+    WeightedRandomSampler,
+    Sampler,
+)
 
 import src.configs as cfg
 from src.configs import TrainingConfig, DEVICE
@@ -30,15 +34,45 @@ def mk_data_loaders_for_segmentation(
         test_size=train_cfg.test_size,
         random_state=train_cfg.random_state,
     )
-    def mk_dl_from_tensors(*tensors: list[Tensor]) -> DataLoader:
-        dataset = TensorDataset(*tensors)
-        return DataLoader(dataset, train_cfg.batch_size)
+    if not hasattr(train_cfg, "use_cls_balanced_samplerr"):
+        print("WARNING: no 'use_cls_balanced_samplerr' param in train config defaulting to False.")
+    if getattr(train_cfg, "use_cls_balanced_samplerr", False):
+        print("Using weighted random sampler.")
+        samples_weights = mk_samples_weights(x_train, y_train)
+        train_sampler = WeightedRandomSampler(
+            samples_weights, 
+            num_samples=len(samples_weights),
+            replacement=True,
+        )
+        train_shuffle = False
+    else:
+        train_shuffle = True
+        train_sampler = None
     y_test_fill = torch.zeros(len(x_test), 256, 256, device=cfg.DEVICE)
     return {
-        "train": mk_dl_from_tensors(x_train, y_train),
-        "valid": mk_dl_from_tensors(x_valid, y_valid),
-        "test": mk_dl_from_tensors(x_test, y_test_fill),
+        "train": mk_dl_from_tensors(x_train, y_train, batch_size=train_cfg.batch_size, shuffle=train_shuffle, sampler=train_sampler),
+        "valid": mk_dl_from_tensors(x_valid, y_valid, batch_size=train_cfg.batch_size),
+        "test":  mk_dl_from_tensors(x_test, y_test_fill, batch_size=train_cfg.batch_size),
     }
+
+def mk_dl_from_tensors(*tensors: list[Tensor], **data_loader_kwargs) -> DataLoader:
+    dataset = TensorDataset(*tensors)
+    return DataLoader(dataset, **data_loader_kwargs)
+
+def mk_samples_weights(x_train_with_labels: Tensor, y_train_with_labels: Tensor) -> Tensor:
+    """Takes in x and y with removed samples without labels and returns per sample weights."""
+    def cls_presence_mask(y_train: Tensor) -> Tensor:
+        cls_presence = torch.empty(y_train.shape[0], cfg.N_CLASSES)
+        for class_idx in range(0, cfg.N_CLASSES):
+            cls_presence[:, class_idx] = (y_train == class_idx).any(dim=(1, 2))
+        return cls_presence
+    y_classes = cls_presence_mask(y_train_with_labels)
+    class_counts = y_classes.sum(dim=0, keepdim=True)
+    cls_weight = 1 / (class_counts + 1e-8)
+    cls_weight
+    # normed_cls_weight = cls_weight / cls_weight.sum()
+    sample_weights = (y_classes * cls_weight).sum(dim=1)
+    return sample_weights
 
 def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, DataLoader]:
     x_train, y_train, x_test = load_raw_dataset(DEVICE)

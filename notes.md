@@ -10,10 +10,10 @@ ideas:
     - Use swinVIT
     - Use float32 all the way
     - use blur and gaussian noise for data aug
+- workflow:
+    - save checkpoint as artifact on wandb
 
 todo:
-- save images on wandb
-- save checkpoint as artifact on wandb
 
 at the end of the competion:
 - make the repo veeeeeeeery clean, so I can flex it to everyone
@@ -31,3 +31,4 @@ at the end of the competion:
     - use better data augmentation -->
 <!-- - speed up data aug by using torchvision.tranform.v2 -->
 <!-- - use torch compile -->
+<!-- - save checkpoint  -->

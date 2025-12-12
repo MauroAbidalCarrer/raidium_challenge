@@ -61,7 +61,7 @@ class Trainer:
                 self.wandb_log_dict_with_prefix(training_dict, "training")
             if self.epoch % 50 == 0 or is_last_epoch:
                 timing.print_time_dict()
-            if (self.epoch % 5 == 0 and self.epoch != 0) or is_last_epoch:
+            if (self.epoch % 50 == 0 and self.epoch != 0) or is_last_epoch:
                 self.save_checkpoint(chkpt_pth_format)
 
     def save_checkpoint(self, chkpt_pth_format: str):

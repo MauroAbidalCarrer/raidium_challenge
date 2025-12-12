@@ -1,11 +1,12 @@
-# mae_vit_batchfirst.py
 from __future__ import annotations
+from itertools import repeat
 from typing import Tuple, Optional
 
 import torch
 import numpy as np
 from torch import Tensor, nn
 from einops import rearrange
+from monai.networks.nets import UNet
 from einops.layers.torch import Rearrange
 from timm.models.layers import trunc_normal_
 from timm.models.vision_transformer import Block
@@ -242,9 +243,6 @@ class MAE_DecoderBF(nn.Module):
         return img, mask_img
 
 
-# -------------------------
-# Full MAE ViT (batch-first)
-# -------------------------
 class MAE_ViT(nn.Module):
     def __init__(
         self,
@@ -306,37 +304,30 @@ class MAE_ViT(nn.Module):
             print("number of parameters:", str(params // 1e6) + "M")
         return model
 
-
-if __name__ == "__main__":
-    torch.manual_seed(0)
-    B = 64
-    in_ch = 1
-    H = W = 256
-    img = torch.randn(B, in_ch, H, W)
-
-    model = MAE_ViT(
-        image_size=256,
-        patch_size=16,     # recommended for 256x256
-        emb_dim=256,
-        encoder_layer=6,
-        encoder_head=8,
-        decoder_layer=3,
-        decoder_head=8,
-        mask_ratio=0.75,
-        in_channels=in_ch,
-        out_channels=1,
+def mk_unet(model_cfg: cfg.ModelConfig) -> nn.Module:
+    kwargs = model_cfg.constructor_kwargs
+    channels = kwargs["channels"]
+    model = (
+        UnetWrapper(
+            spatial_dims=2,
+            in_channels=1,
+            out_channels=cfg.N_CLASSES,
+            kernel_size=3,
+            strides=tuple(repeat(2, len(channels) - 1)),
+            bias=True,
+            **kwargs,
+            # channels=channels,
+            # num_res_units=model_cfg.num_res_units,
+            # act=model_cfg.act,
+            # norm=model_cfg.norm,
+            # dropout=model_cfg.dropout,
+        )
+        .to(cfg.DEVICE)
     )
+    model.cfg = model_cfg
+    return model
 
-    model = model.to("cuda" if torch.cuda.is_available() else "cpu")
-    device = next(model.parameters()).device
-    img = img.to(device)
 
-    # Forward
-    pred_img, mask_img = model(img)
-    print("pred_img", pred_img.shape)  # (B, out_ch, H, W)
-    print("mask_img", mask_img.shape)
-
-    # Example masked MSE loss (only average over predicted pixels)
-    eps = 1e-6
-    loss = ((pred_img - img) ** 2 * mask_img).sum() / (mask_img.sum().clamp_min(eps))
-    print("loss:", loss.item())
+class UnetWrapper(UNet):
+    def forward(self, batch_dict: dict[str, Tensor]) -> dict[str, Tensor]:
+        return {"y_pred": super().forward(batch_dict["x"])}

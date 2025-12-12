@@ -1,6 +1,7 @@
 import os
 import shutil
 import zipfile
+from typing import Any
 from pathlib import Path
 
 import torch
@@ -68,6 +69,16 @@ def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, Data
         "valid": valid_loader,
         "test":  test_loader,
     }
+
+def preprocess_batch(batch_dict: dict[str, Any]) -> dict[str, Any]:
+    x = batch_dict["x"]
+    x = x.to(device=DEVICE, dtype=torch.float)
+    batch_dict["x"] = (x - MEAN) / STD
+    batch_dict["y_true"] = (
+        tv_tensors.Mask(batch_dict["y_true"])
+        .to(device=cfg.DEVICE, dtype=torch.long)
+    )
+    return batch_dict
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """

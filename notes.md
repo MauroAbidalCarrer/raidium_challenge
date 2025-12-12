@@ -14,7 +14,17 @@ ideas:
     - save checkpoint as artifact on wandb
 
 todo:
-- Get better score with unet
+- fix training:
+    - make sure we can restart training from checkpoint(kinda done)
+    - understand why we get a better validation dice score when restarting training from a checkpoint
+    - ideally save checkpoint on wandb
+- in parallel:
+    - Get better score with unet:
+        - add gaussian blur
+        - decrease test size
+        - train for longer from checkpoint
+    - TTA
+    - ViT pretraining with downscaled image
 at the end of the competion:
 - make the repo veeeeeeeery clean, so I can flex it to everyone
     - create a second repo and delete this one?

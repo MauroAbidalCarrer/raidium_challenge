@@ -38,8 +38,8 @@ def main():
         trainer = training.Trainer.from_checkpoint(sys.argv[1], PRETRAIN_WANDB_CFG)
     else:
         trainer = mk_trainer_from_scratch()
-    data_loaders = dataset.mk_semi_supervised_data_loaders(trainer.train_cfg)
-    criterion = metrics.SemiSupervisedLoss(trainer.train_cfg)
+    data_loaders = dataset.mk_semi_supervised_data_loaders(trainer.cfg)
+    criterion = metrics.SemiSupervisedLoss(trainer.cfg)
     trainer.train_model(data_loaders, criterion, "checkpoints/pretrained/vit_epoch_{epoch}.pt")
 
 def mk_trainer_from_scratch() -> training.Trainer:

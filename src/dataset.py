@@ -30,6 +30,7 @@ def mk_data_loaders_for_segmentation(
         x_train,
         y_train,
         test_size=train_cfg.test_size,
+        random_state=train_cfg.random_state,
     )
     def mk_dl_from_tensors(*tensors: list[Tensor]) -> DataLoader:
         dataset = TensorDataset(*tensors)
@@ -74,10 +75,11 @@ def preprocess_batch(batch_dict: dict[str, Any]) -> dict[str, Any]:
     x = batch_dict["x"]
     x = x.to(device=DEVICE, dtype=torch.float)
     batch_dict["x"] = (x - MEAN) / STD
-    batch_dict["y_true"] = (
-        tv_tensors.Mask(batch_dict["y_true"])
-        .to(device=cfg.DEVICE, dtype=torch.long)
-    )
+    if "y_true" in batch_dict:
+        batch_dict["y_true"] = (
+            tv_tensors.Mask(batch_dict["y_true"])
+            .to(device=cfg.DEVICE, dtype=torch.long)
+        )
     return batch_dict
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:

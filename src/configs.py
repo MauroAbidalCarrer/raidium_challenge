@@ -102,18 +102,14 @@ OPTIMIZER_CFGS = {
     "unet": OptimizerConfig(starting_lr=5e-4),
 }
 
-@dataclass
-class WandbConfig:
-    tags: list[str]
-    group: str
+WANDB_RUN_TAGS = {
+    "unet": ["segmentation", "unet"]
+}
 
 @dataclass
 class ModelConfig:
     architecutre: str
     constructor_kwargs: dict
-    # n_encoder_layers: int = 8
-    # n_encoder_heads:  int = 8
-    # n_decoder_heads:  int = 8
     compile: bool = True
 
 DFLT_MODELS_CFGS = {
@@ -127,14 +123,3 @@ DFLT_MODELS_CFGS = {
         }
     ),
 }
-
-    # channels: Sequence[int] = field(default_factory=lambda: (64, 128, 256, 512))
-    # strides: Sequence[int] = field(default_factory=lambda: (2, 2, 2))
-    # kernel_size: int = 3
-    # num_res_units: int = 2
-    # act: tuple[str, dict] = field(
-    #     default_factory=lambda: ("leakyrelu", {"negative_slope": 0.01})
-    # )
-    # norm: str = "instance"
-    # dropout: float = 0.0
-    # bias: bool = True

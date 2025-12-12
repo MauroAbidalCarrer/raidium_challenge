@@ -1,20 +1,17 @@
 import os
-import math
 from tqdm import tqdm
-from typing import Any
-from pathlib import Path
+from typing import Any, Optional
 from collections import defaultdict
 
 import torch
 import wandb
 import numpy as np
 from torch import nn, Tensor
+from rich.progress import track
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import (
     LRScheduler,
-    OneCycleLR,
-    LambdaLR,
     ConstantLR
 )
 
@@ -23,7 +20,6 @@ from src import (
     metrics,
     timing,
     utils,
-    models,
 )
 from src import configs as cfg
 
@@ -35,41 +31,19 @@ class Trainer:
             train_cfg: cfg.TrainingConfig,
             optimizer: torch.optim.Optimizer,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
-            wandb_cfg: cfg.WandbConfig,
+            wandb_run: wandb.Run,
         ):
         self.model = model
-        self.train_cfg = train_cfg
+        self.cfg = train_cfg
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
+        self.step = 0
         self.epoch = 0
         self.training_samples_seen = 0
+        self.wandb_run = wandb_run
         dataset.mk_dataset(verbose=False)
         torch.backends.cuda.matmul.fp32_precision = 'ieee'
         utils.setup_seed(train_cfg.random_state)
-        # Initilaze weights and biases run
-        wandb_init(
-            self.model,
-            wandb_cfg,
-            self.model.cfg,
-            train_cfg,
-        )
-
-    @classmethod
-    def from_checkpoint(cls, path: str | Path, wandb_cfg: cfg.WandbConfig):
-        print("Starting training from checkpoint:", path)
-        chkpt = torch.load(path, weights_only=False)
-        train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
-        model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
-        model = models.MAE_ViT.from_config(model_cfg, print_params_count=True)
-        model.load_state_dict(chkpt["model"])
-        optimizer = mk_optimizer(model, train_cfg)
-        optimizer.load_state_dict(chkpt["optimizer"])
-        lr_sched = mk_lr_scheduler(train_cfg, optimizer)
-        lr_sched.load_state_dict(chkpt["lr_scheduler"])
-        trainer = cls(model, train_cfg, optimizer, lr_sched, wandb_cfg)
-        trainer.epoch = chkpt["epoch"]
-        trainer.training_samples_seen = chkpt["training_samples_seen"]
-        return trainer
 
     def train_model(
             self,
@@ -77,38 +51,49 @@ class Trainer:
             criterion: cfg.criterion_t,
             chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
-        self.training_samples_seen = 0
-        for _ in tqdm(range(self.epoch, self.train_cfg.n_epochs)):
-            is_last_epoch = self.epoch == self.train_cfg.n_epochs - 1
+        for _ in track(range(self.epoch, self.cfg.n_epochs), description="Training model"):
+            is_last_epoch = self.epoch == self.cfg.n_epochs - 1
             if self.epoch % 50 == 0 or is_last_epoch:
                 with timing.time_to_run("evaluation/total"):
                     self.evaluate_model(data_loaders, criterion=criterion)
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
-            wandb_log_dict_with_prefix(training_dict, "training", self.epoch)
-            if self.epoch % 10 == 0 or is_last_epoch:
+                self.wandb_log_dict_with_prefix(training_dict, "training")
+            if self.epoch % 50 == 0 or is_last_epoch:
                 timing.print_time_dict()
-            if (self.epoch % 100 == 0 and self.epoch != 0) or is_last_epoch:
+            if (self.epoch % 50 == 0 and self.epoch != 0) or is_last_epoch:
                 self.save_checkpoint(chkpt_pth_format)
-            self.epoch += 1
 
     def save_checkpoint(self, chkpt_pth_format: str):
         chkpt_dict = {
             "model": self.model.state_dict(),
             "model_cfg": vars(self.model.cfg),
-            "train_cfg": vars(self.train_cfg),
+            "train_cfg": vars(self.cfg),
             "optimizer": self.optimizer.state_dict(),
             "lr_scheduler": self.lr_scheduler.state_dict(),
+            "lr_scheduler_cfg": getattr(self.lr_scheduler, "cfg", None),
+            "optimizer_cfg": getattr(self.optimizer.state_dict(), "cfg", None),
+            "step": self.step,
             "epoch": self.epoch,
             "training_samples_seen": self.training_samples_seen,
         }
-        pth = chkpt_pth_format.format(epoch=self.epoch)
+        pth = chkpt_pth_format.format(epoch=self.epoch, wandb_run_name=self.wandb_run.name)
         dir_path = os.path.dirname(pth)
         if dir_path:  # handle case where pth has no directory component
             os.makedirs(dir_path, exist_ok=True)
         # Save checkpoint
         torch.save(chkpt_dict, pth)
-        print("Saved checkpoint at", pth)
+        # create wandb artifact
+        artifact_name = f"checkpoint-epoch-{self.epoch}"
+        artifact = wandb.Artifact(
+            name=artifact_name,
+            type="model",
+        )
+        # add file to artifact
+        artifact.add_file(pth)
+        # log artifact to run
+        self.wandb_run.log_artifact(artifact, artifact_name)
+        print("Uploaded checkpoint as artifact", artifact_name, "and to", pth)
 
     def train_model_for_single_epoch(
             self,
@@ -130,7 +115,7 @@ class Trainer:
         epoch_dict["training_samples_seen"] = self.training_samples_seen
         epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         # TODO: Check if this shouldn't get called per step instead of per epoch.
-        self.lr_scheduler.step()
+        self.epoch += 1
         return epoch_dict
 
     def perform_training_step(
@@ -138,8 +123,8 @@ class Trainer:
             batch_dict: dict[str, Any],
             criterion: cfg.criterion_t,
         ) -> dict[str, Tensor]:
-        if self.train_cfg.transform:
-            batch_dict["x"], batch_dict["y_true"] = self.train_cfg.transform(
+        if self.cfg.transform:
+            batch_dict["x"], batch_dict["y_true"] = self.cfg.transform(
                 batch_dict["x"],
                 batch_dict["y_true"],
             )
@@ -157,12 +142,13 @@ class Trainer:
         )
         self.optimizer.step()
         self.training_samples_seen += len(batch_dict["x"])
+        self.lr_scheduler.step()
+        self.step += 1
         return {**loss_dict, "loss_norm": loss_norm}
 
     @torch.no_grad
     def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: cfg.criterion_t):
         """
-        Plots the reconstruction and segmentation of masked batches from all splits.
         Evaluates the reconstruction and seg losses of validation split in eval mode.
         Evaluates the seg losses of validation split in inference mode.
         Evaluates the recon of test split in eval mode.
@@ -171,9 +157,9 @@ class Trainer:
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
         test_infer_dict  = self.evaluate_model_on_single_split(data_loaders["test"],  criterion)
         valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
-        wandb_log_dict_with_prefix(valid_eval_dict, "validation", self.epoch)
-        wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test",  self.epoch)
-        wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid", self.epoch)
+        self.wandb_log_dict_with_prefix(valid_eval_dict, "validation")
+        self.wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test")
+        self.wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid")
 
     @torch.no_grad
     def evaluate_model_on_single_split(
@@ -211,47 +197,45 @@ class Trainer:
             eval_dict["dice_score"] = metrics.dice_pandas(seg_y_true, seg_preds)
         return eval_dict
 
+    def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
+        data_with_prefix = {prefix + "/" + k: v for k, v in data.items()}
+        trainer_data = {
+            "training/epoch": self.epoch,
+            "training/step": self.step,
+            "training/traing_samples_seen": self.training_samples_seen,
+            # for backward compatibility with legacy code
+            "training/samples_seen": self.training_samples_seen, 
+        }
+        wandb.log(
+            data=data_with_prefix | trainer_data,
+            step=self.step,
+        )
+
+
 def wandb_init(
-        model: nn.Module,
-        wandb_cfg: cfg.WandbConfig,
         *configs: list[Any],
-    ):
+        tags: Optional[list[str]]=[],
+        group: Optional[str]=None
+    ) -> wandb.Run:
     cfg_vars = {}
     for cfg in configs:
         cfg_vars |= vars(cfg)
-    wandb.init(
+    return wandb.init(
         project="raidium-challenge",
-        config={
-            **cfg_vars,
-            "model_class": type(model).__class__,
-        },
-        **vars(wandb_cfg),
-    )
-
-def wandb_log_dict_with_prefix(data: dict[str, Any], prefix: str, step: int):
-    wandb.log(
-        data={prefix + "/" + k: v for k, v in data.items()},
-        step=step,
+        config={**cfg_vars,},
+        tags=tags,
+        group=group,
     )
     
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:
-    # def lr_func(epoch: int) -> float:
-    #     return min(
-    #         (epoch + 1) / (train_cfg.n_warmup_epochs + 1e-8),
-    #         0.5 * (math.cos(epoch / train_cfg.n_epochs * math.pi) + 1)
-    #     )
-    # return LambdaLR(optimizer, lr_lambda=lr_func)
-    # return OneCycleLR(
-    #     optimizer,
-    #     train_cfg.max_lr,
-    #     total_steps=train_cfg.n_epochs
-    # )
     return ConstantLR(optimizer, factor=1)
 
 def mk_optimizer(model: nn.Module, optimizer_cfg: cfg.OptimizerConfig) -> Optimizer:
-    return torch.optim.AdamW(
+    optim = torch.optim.AdamW(
         model.parameters(),
         # TODO: Understand the scaling of the max_lr
         lr=optimizer_cfg.starting_lr,
         betas=(optimizer_cfg.beta0, optimizer_cfg.beta1),
     )
+    optim.cfg = optimizer_cfg
+    return optim

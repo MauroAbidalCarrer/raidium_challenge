@@ -2,9 +2,11 @@ from typing import Optional, Any
 
 import torch
 import numpy as np
+import plotly.express as px
 from torch import nn, Tensor
 import matplotlib.pyplot as plt
 from torchvision.transforms import v2
+from torch.utils.data import DataLoader
 
 from src import dataset
 
@@ -123,3 +125,35 @@ def plt_recon_imgs(
         ax.axis("off")
     plt.tight_layout()
     plt.show()
+
+
+def plt_recon_imgs_px(model: nn.Module, loader: DataLoader):
+    x, y_true = next(iter(loader))
+    x = dataset.preprocess_imgs(x)[:MAX_N_SAMPLES_TO_PLOT]
+    x_hat, mask = model(x, 0.65)
+    x_hat_img = x_hat[:, :1]
+    mask = mask[:, :1]
+    x_hat_img = x_hat_img * mask + x * (1 - mask)
+    img = torch.cat(
+        [
+            x * (1 - mask),
+            x_hat_img,
+            x,
+        ],
+        dim=0,
+    )
+    # img = img * dataset.STD + dataset.MEAN 
+    np_imgs = (
+        img
+        .detach()
+        .cpu()
+        .numpy()
+        .squeeze()
+    )
+    fig = px.imshow(
+        np_imgs,
+        facet_col=0,
+        facet_col_wrap=MAX_N_SAMPLES_TO_PLOT,
+        color_continuous_scale="rainbow",
+    )
+    fig.show()

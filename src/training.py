@@ -93,7 +93,6 @@ class Trainer:
             self.epoch += 1
 
     def save_checkpoint(self, chkpt_pth_format: str):
-        """Saves checkpoint on wandb and on the machine."""
         chkpt_dict = {
             "model": self.model.state_dict(),
             "model_cfg": vars(self.model.cfg),
@@ -101,11 +100,15 @@ class Trainer:
             "optimizer": self.optimizer.state_dict(),
             "lr_scheduler": self.lr_scheduler.state_dict(),
             "epoch": self.epoch,
-            "training_samples_seen": self.training_samples_seen
+            "training_samples_seen": self.training_samples_seen,
         }
         pth = chkpt_pth_format.format(epoch=self.epoch)
+        dir_path = os.path.dirname(pth)
+        if dir_path:  # handle case where pth has no directory component
+            os.makedirs(dir_path, exist_ok=True)
+        # Save checkpoint
         torch.save(chkpt_dict, pth)
-        print("Saved checpoint at", pth)
+        print("Saved checkpoint at", pth)
 
     def train_model_for_single_epoch(
             self,
@@ -116,44 +119,44 @@ class Trainer:
         n_batches = len(train_loader)
         mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
         epochs_steps_dicts: dict[str, Tensor] = defaultdict(mk_epoch_buff)
-        batch_it = iter(train_loader)
-        for batch_i in range(len(train_loader)):
-            with timing.time_to_run("training/get_batch and preprocess"):
-                x, y_true = next(batch_it)
-                x = dataset.preprocess_imgs(x)
-                y_true = dataset.preprocess_y_true(y_true)
-                if self.train_cfg.transform:
-                    x, y_true = self.train_cfg.transform(x, y_true)
+        for batch_i, (x, y_true) in enumerate(train_loader):
+            batch_dict = {"x": x, "y_true": y_true}
+            batch_dict = dataset.preprocess_batch(batch_dict)
             with timing.time_to_run("training/step"):
-                step_dict = self.perform_training_step(x, y_true, criterion)
-            with timing.time_to_run("training/epoch_dict_store_values"):
-                for k, v in step_dict.items():
-                    epochs_steps_dicts[k][batch_i] = v.detach()
-        with timing.time_to_run("training/mk_ epoch_dict"):
-            epoch_dict = {k: v.mean().item() for k, v in epochs_steps_dicts.items()}
-            epoch_dict["training_samples_seen"] = self.training_samples_seen
-            epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
+                step_dict = self.perform_training_step(batch_dict, criterion)
+            for k, v in step_dict.items():
+                epochs_steps_dicts[k][batch_i] = v.detach()
+        epoch_dict = {k: v.mean().item() for k, v in epochs_steps_dicts.items()}
+        epoch_dict["training_samples_seen"] = self.training_samples_seen
+        epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         # TODO: Check if this shouldn't get called per step instead of per epoch.
         self.lr_scheduler.step()
         return epoch_dict
 
-    def perform_training_step(self, x: Tensor, y_true: Tensor, criterion: cfg.criterion_t) -> dict[str, Tensor]:
+    def perform_training_step(
+            self,
+            batch_dict: dict[str, Any],
+            criterion: cfg.criterion_t,
+        ) -> dict[str, Tensor]:
+        if self.train_cfg.transform:
+            batch_dict["x"], batch_dict["y_true"] = self.train_cfg.transform(
+                batch_dict["x"],
+                batch_dict["y_true"],
+            )
         self.optimizer.zero_grad()
         with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
             with timing.time_to_run("training/forward"):
-                predicted_img, mask = self.model(x, self.train_cfg.mask_ratio)
+                model_output_dict = self.model(batch_dict)
             with timing.time_to_run("training/loss"): 
-                loss_dict = criterion(x, predicted_img, mask, y_true)
+                loss_dict = criterion(batch_dict | model_output_dict)
         with timing.time_to_run("training/backprop"):
             loss_dict["loss"].backward()
-        with timing.time_to_run("training/clip_grad_norm_"):
-            loss_norm = torch.nn.utils.clip_grad_norm_(
-                self.model.parameters(),
-                1.0, # TODO: Hypertune this
-            )
-        with timing.time_to_run("training/optimizer step"):
-            self.optimizer.step()
-        self.training_samples_seen += len(x)
+        loss_norm = torch.nn.utils.clip_grad_norm_(
+            self.model.parameters(),
+            1.0, # TODO: Hypertune this
+        )
+        self.optimizer.step()
+        self.training_samples_seen += len(batch_dict["x"])
         return {**loss_dict, "loss_norm": loss_norm}
 
     @torch.no_grad
@@ -185,20 +188,19 @@ class Trainer:
         seg_preds = []
         seg_y_true = []
         for batch_i, (x, y_true) in enumerate(data_loader):
-            x = dataset.preprocess_imgs(x)
-            y_true = dataset.preprocess_y_true(y_true)
+            batch_dict = {"x": x, "y_true": y_true}
+            batch_dict = dataset.preprocess_batch(batch_dict)
             with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
-                predicted_img, mask = self.model(x, self.train_cfg.mask_ratio)
-                loss_dict = criterion(x, predicted_img, mask, y_true)
+                model_output_dict = self.model(batch_dict)
+                loss_dict = criterion(batch_dict | model_output_dict)
             loss_dict["loss_norm"] = torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
                 1.0, # TODO: Hypertune this
             )
             for k, v in loss_dict.items():
                 eval_dict[k][batch_i] = v.detach()
-            y_pred_logits = predicted_img[:, 1:]
-            pred = torch.argmax(y_pred_logits, dim=1)
-            seg_y_true.append(y_true.squeeze().cpu().numpy())
+            pred = torch.argmax(model_output_dict["y_pred"], dim=1)
+            seg_y_true.append(batch_dict["y_true"].squeeze().cpu().numpy())
             seg_preds.append(pred.squeeze().cpu().numpy())
         with timing.time_to_run("evaluation/mk_eval_dict"):
             eval_dict =  {k: v.mean().item() for k, v in eval_dict.items()}
@@ -246,10 +248,10 @@ def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRSc
     # )
     return ConstantLR(optimizer, factor=1)
 
-def mk_optimizer(model: nn.Module, train_cfg: cfg.TrainingConfig) -> Optimizer:
+def mk_optimizer(model: nn.Module, optimizer_cfg: cfg.OptimizerConfig) -> Optimizer:
     return torch.optim.AdamW(
         model.parameters(),
         # TODO: Understand the scaling of the max_lr
-        lr=train_cfg.start_lr,
-        betas=(0.9, 0.95),
+        lr=optimizer_cfg.starting_lr,
+        betas=(optimizer_cfg.beta0, optimizer_cfg.beta1),
     )

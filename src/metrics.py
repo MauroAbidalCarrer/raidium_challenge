@@ -1,6 +1,6 @@
 import json
 import warnings
-from typing import Optional
+from typing import Optional, Any
 
 import torch
 import numpy as np
@@ -86,24 +86,23 @@ class SegmentationLoss:
         class_weights = get_class_weights().to(DEVICE)
         self.class_weights = class_weights
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=class_weights)
-        print("Going to apply class weights to dice loss.")
+        if self.train_cfg.use_cls_weights_for_dice:
+            print("Going to apply class weights to dice loss.")
     
-    def __call__(
-            self,
-            x: Tensor,
-            x_hat: Tensor,
-            mask: Tensor,
-            y_true: Tensor,
-        ) -> dict[str, Tensor]:
+    def __call__(self, forward_dict: dict[str, Any]) -> dict[str, Tensor]:
         """
         Computes the weighted average of the cross entropy and dice loss of y pred.
         ### Returns:
         Dictionnary of loss_average, ce_loss and dice_loss
         """
-        y_true = y_true.long()
-        y_pred = x_hat[:, 1:]
+        
+        y_true = forward_dict["y_true"].long()
+        y_pred = forward_dict["y_pred"]
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
-        dice_loss = torch_dice_loss(y_pred, y_true, self.class_weights)
+        if self.train_cfg.use_cls_weights_for_dice:
+            dice_loss = torch_dice_loss(y_pred, y_true, self.class_weights)
+        else:
+            dice_loss = torch_dice_loss(y_pred, y_true)
         loss = dice_loss * self.train_cfg.dice_loss_weight \
             + ce_loss * self.train_cfg.cross_entropy_loss_weight
         return {
@@ -112,7 +111,7 @@ class SegmentationLoss:
             "dice_loss": dice_loss,
         }
 
-def torch_dice_loss(pred: Tensor, target: Tensor, class_weights: Optional[Tensor], smooth: float=1e-7) -> Tensor:
+def torch_dice_loss(pred: Tensor, target: Tensor, class_weights: Optional[Tensor]=None, smooth: float=1e-7) -> Tensor:
     pred = torch.softmax(pred, dim=1)
     target_one_hot = (
         torch.nn.functional.one_hot(

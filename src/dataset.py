@@ -1,6 +1,7 @@
 import os
 import shutil
 import zipfile
+from typing import Any
 from pathlib import Path
 
 import torch
@@ -18,7 +19,7 @@ from src.configs import TrainingConfig, DEVICE
 from sklearn.model_selection import train_test_split
 
 
-def mk_data_loaders_for_finetuning(
+def mk_data_loaders_for_segmentation(
         train_cfg: cfg.TrainingConfig
     ) -> dict[str, DataLoader]:
     x_train, y_train, x_test = load_raw_dataset(cfg.DEVICE)
@@ -68,6 +69,16 @@ def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, Data
         "valid": valid_loader,
         "test":  test_loader,
     }
+
+def preprocess_batch(batch_dict: dict[str, Any]) -> dict[str, Any]:
+    x = batch_dict["x"]
+    x = x.to(device=DEVICE, dtype=torch.float)
+    batch_dict["x"] = (x - MEAN) / STD
+    batch_dict["y_true"] = (
+        tv_tensors.Mask(batch_dict["y_true"])
+        .to(device=cfg.DEVICE, dtype=torch.long)
+    )
+    return batch_dict
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """

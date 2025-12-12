@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 
 import torch
 import numpy as np
@@ -9,42 +9,51 @@ from torchvision.transforms import v2
 from src import dataset
 
 
-N_IMGS_TO_PLT = 5
+MAX_N_SAMPLES_TO_PLOT = 5
 
-
-def plt_sample(slice_image: Tensor, *seg_masks):
-    fig, axes = plt.subplots(1, 1 + len(seg_masks), squeeze=False)
-    fig = fig.set_size_inches(10, 10)
-    axes[0, 0].imshow(slice_image, cmap="gray")
-    for seg_i, seg_mask in enumerate(seg_masks):
-        axes[0, seg_i + 1].imshow(slice_image, cmap="gray")
-        seg_masked = np.ma.masked_where(seg_mask == 0, seg_mask)
-        axes[0, seg_i + 1].imshow(seg_masked, cmap="tab20")
-    plt.axis("off")
-    plt.show()
     
+
+
 @torch.no_grad
-def plt_pred(
+def plt_seg_pred(
         model: nn.Module,
-        sample_idx: int,
-        x: Tensor,
-        y: Optional[Tensor] = None,
+        batch: dict[str, Any],
+        transform: Optional[v2.Transform] = v2.Identity(),
+        ax_size: Optional[int] = 4,
     ):
-    sample = x[sample_idx:sample_idx + 1]
-    model_device = next(model.parameters()).device
-    y_pred_logits = model(sample.to(model_device))
-    y_pred = torch.argmax(y_pred_logits, dim=1)
-    if y is not None:
-        plt_sample(
-            sample.squeeze().cpu().numpy(),
-            y_pred.squeeze().cpu().numpy(),
-            y[sample_idx].cpu().numpy(),
-        )
+    batch = dataset.preprocess_batch(batch)
+    batch_has_y_true = "y_true" in batch
+    if batch_has_y_true:
+        batch["x"], batch["y_true"] = transform(batch["x"], batch["y_true"])
     else:
-        plt_sample(
-            sample.squeeze().cpu().numpy(),
-            y_pred.squeeze().cpu().numpy(),
+        batch["x"] = transform(batch["x"])
+    model_output_dict = model(batch)
+    batch["y_pred"] = torch.argmax(model_output_dict["y_pred"], dim=1)
+    seg_masks_keys = ("y_pred", "y_true") if batch_has_y_true else ("y_pred")
+    n_samples_to_plt = min(len(batch["x"]), MAX_N_SAMPLES_TO_PLOT)
+    n_rows = 2 + int(batch_has_y_true)
+    batch["x"] = batch["x"].detach().cpu().numpy().squeeze()
+    batch["y_pred"] = batch["y_pred"].detach().cpu().numpy()
+    if batch_has_y_true:
+        batch["y_true"] = batch["y_true"].detach().cpu().numpy()
+    fig, axes = plt.subplots(n_rows, n_samples_to_plt, squeeze=False)
+    fig.set_size_inches(n_samples_to_plt * ax_size, n_rows * ax_size)
+    for seg_mask_key in seg_masks_keys:
+        batch[seg_mask_key] = batch[seg_mask_key][:n_samples_to_plt]
+    for j in range(n_samples_to_plt):
+        axes[0, j].imshow(
+            batch["x"][j],
+            cmap="gray",
         )
+        imshow_seg(axes[1, j], batch["x"][j], batch["y_pred"][j])
+        if batch_has_y_true:
+            imshow_seg(axes[2, j], batch["x"][j], batch["y_true"][j])
+
+def imshow_seg(ax, x: Tensor, seg: Tensor):
+
+    ax.imshow(x, cmap="gray")
+    seg_masked = np.ma.masked_where(seg == 0, seg)
+    ax.imshow(seg_masked, cmap="tab20")
 
 @torch.no_grad
 def plt_model_preds(
@@ -63,7 +72,7 @@ def plt_model_preds(
         x = x[sample_has_seg]
         y_true = y_true[sample_has_seg]
     x = dataset.preprocess_imgs(x)
-    x = x[:N_IMGS_TO_PLT]
+    x = x[:MAX_N_SAMPLES_TO_PLOT]
     y_true = dataset.preprocess_y_true(y_true)
     if transform is not None:
         x, y_true = transform(x, y_true)
@@ -81,7 +90,7 @@ def plt_recon_imgs(
         x_hat_img: Tensor,
         mask: Tensor,
         n_cols: int = 8,
-        n_imgs_to_plt: int=N_IMGS_TO_PLT,
+        n_imgs_to_plt: int=MAX_N_SAMPLES_TO_PLOT,
     ):
     """
     Matplotlib version of the reconstruction visualization.
@@ -114,19 +123,3 @@ def plt_recon_imgs(
         ax.axis("off")
     plt.tight_layout()
     plt.show()
-
-def plt_seg_imgs(
-        x: Tensor,
-        y_true: Tensor,
-        y_pred: Tensor,
-        mask: Tensor,
-        n_imgs_to_plt: int=N_IMGS_TO_PLT
-    ):
-    x = x * (1 - mask)
-    for i in range(min(n_imgs_to_plt, len(x))):
-
-        plt_sample(
-            x[i].squeeze().detach().cpu().numpy(),
-            y_pred[i].squeeze().detach().cpu().argmax(dim=0).numpy(),
-            y_true[i].squeeze().detach().cpu().numpy(),
-        )

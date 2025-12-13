@@ -147,6 +147,7 @@ class ModelConfig:
 MODELS_CFGS = {
     "downscaled_vit": ModelConfig(
         architecutre="mae_vit",
+        constructor_kwargs={"patch_size": 8},
         downscaling=2,
     ),
     "unet": ModelConfig(

@@ -34,7 +34,8 @@ def main():
     else:
         print("Error: Don't know if this is a pretraining checkpoint or finetuning checkpoint please put it in appropriate folder")
         exit(1)
-
+    for param in model.model.encoder.parameters():
+        param.requires_grad_(False)
     lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
     criterion = metrics.SegmentationLoss(train_cfg)
     data_loaders = dataset.mk_segmentation_data_loaders(train_cfg)

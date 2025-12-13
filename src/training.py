@@ -51,7 +51,11 @@ class Trainer:
             criterion: cfg.criterion_t,
             chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
-        for _ in track(range(self.epoch, self.cfg.n_epochs), description="Training model"):
+        epoch_it = track(
+            range(self.epoch, self.cfg.n_epochs),
+            description="Training model",
+        )
+        for _ in epoch_it:
             is_last_epoch = self.epoch == self.cfg.n_epochs - 1
             if self.epoch % 50 == 0 or is_last_epoch:
                 with timing.time_to_run("evaluation/total"):
@@ -59,8 +63,8 @@ class Trainer:
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
-            if self.epoch % 50 == 0 or is_last_epoch:
-                timing.print_time_dict()
+            # if self.epoch % 50 == 0 or is_last_epoch:
+            #     timing.print_time_dict()
             if (self.epoch % 50 == 0 and self.epoch != 0) or is_last_epoch:
                 self.save_checkpoint(chkpt_pth_format)
 
@@ -132,7 +136,7 @@ class Trainer:
         with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
             with timing.time_to_run("training/forward"):
                 model_output_dict = self.model(batch_dict)
-            with timing.time_to_run("training/loss"): 
+            with timing.time_to_run("training/loss"):
                 loss_dict = criterion(batch_dict | model_output_dict)
         with timing.time_to_run("training/backprop"):
             loss_dict["loss"].backward()
@@ -204,7 +208,7 @@ class Trainer:
             "training/step": self.step,
             "training/traing_samples_seen": self.training_samples_seen,
             # for backward compatibility with legacy code
-            "training/samples_seen": self.training_samples_seen, 
+            "training/samples_seen": self.training_samples_seen,
         }
         wandb.log(
             data=data_with_prefix | trainer_data,
@@ -226,7 +230,7 @@ def wandb_init(
         tags=tags,
         group=group,
     )
-    
+
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:
     return ConstantLR(optimizer, factor=1)
 

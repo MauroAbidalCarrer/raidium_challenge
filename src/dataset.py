@@ -34,13 +34,13 @@ def mk_segmentation_data_loaders(
         test_size=train_cfg.test_size,
         random_state=train_cfg.random_state,
     )
-    if not hasattr(train_cfg, "use_cls_balanced_samplerr"):
-        print("WARNING: no 'use_cls_balanced_samplerr' param in train config defaulting to False.")
-    if getattr(train_cfg, "use_cls_balanced_samplerr", False):
+    if not hasattr(train_cfg, "use_cls_balanced_sampler"):
+        print("WARNING: no 'use_cls_balanced_sampler' param in train config defaulting to False.")
+    if getattr(train_cfg, "use_cls_balanced_sampler", False):
         print("Using weighted random sampler.")
         samples_weights = mk_samples_weights(y_train)
         train_sampler = WeightedRandomSampler(
-            samples_weights, 
+            samples_weights,
             num_samples=len(samples_weights),
             replacement=True,
         )
@@ -113,8 +113,8 @@ def preprocess_batch(batch_dict: dict[str, Any]) -> dict[str, Any]:
 
 def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
     """
-    - Loads formatted dataset 
-    - Standardizes the x train and test by their combined mean/std 
+    - Loads formatted dataset
+    - Standardizes the x train and test by their combined mean/std
       Since we have access to the x test we can "leak" its stats into the training.
     - Removes the train samples without labels
 
@@ -136,7 +136,7 @@ STD: float = 35.2164
 def preprocess_imgs(x: Tensor) -> Tensor:
     """
     Processes an image to feed it to a model.
-    
+
     :param x: raw image(s)
     :type x: Tensor
     :return: normalized image(s) in float32 on device.
@@ -164,7 +164,7 @@ def mk_dataset(verbose: bool=True):
         download_raw_dataset()
         format_dataset()
         if verbose:
-            print("done")        
+            print("done")
     elif verbose:
         print("'dataset' directory already present not doing anythin, if you want to recreate it please delete the directory.")
 
@@ -200,7 +200,7 @@ def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
         key=lambda filename: int(filename.name.rstrip(".png"))
     ))
     imgs = torch.empty(
-        len(imsge_files), 1, 256, 256, 
+        len(imsge_files), 1, 256, 256,
         dtype=torch.uint8,
     )
     for img_idx, image_file in enumerate(imsge_files):

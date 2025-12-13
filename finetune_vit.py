@@ -18,6 +18,7 @@ def main():
         optim_cfg = cfg.OPTIM_CFGS["finetuning"]
         train_cfg = cfg.TRAIN_CONFIGS["finetuning"]
         model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
+        model_cfg.constructor_kwargs["mask_ratio"] = 0
         model = models.mk_model_from_cfg(model_cfg)
         model.load_state_dict(chkpt["model"])
         optimizer = training.mk_optimizer(model, optim_cfg)
@@ -25,6 +26,7 @@ def main():
         optim_cfg = cfg.OPTIM_CFGS["finetuning"]
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
         model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
+        model_cfg.constructor_kwargs["mask_ratio"] = 0
         model = models.mk_model_from_cfg(model_cfg)
         model.load_state_dict(chkpt["model"])
         optimizer = training.mk_optimizer(model, optim_cfg)

@@ -1,5 +1,6 @@
 import os
 from tqdm import tqdm
+import warnings
 from typing import Any, Optional
 from collections import defaultdict
 
@@ -51,6 +52,12 @@ class Trainer:
             criterion: cfg.criterion_t,
             chkpt_pth_format: str,
         ) -> dict[str, Tensor]:
+        warnings.filterwarnings(
+            "ignore",
+            message="RandomErasing.*tv_tensors.Mask",
+            category=UserWarning,
+        )
+
         epoch_it = track(
             range(self.epoch, self.cfg.n_epochs),
             description="Training model",

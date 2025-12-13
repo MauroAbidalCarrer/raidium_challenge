@@ -16,12 +16,9 @@ ideas:
 todo:
 - in parallel:
     - Get better score with unet:
-        - add gaussian blur
         - decrease test size
-        - train for longer from checkpoint
-        - balance classes
-    - TTA
     - ViT pretraining with downscaled image
+    - TTA
 at the end of the competion:
 
 submissions:
@@ -53,3 +50,7 @@ submissions:
 <!-- - fix training:
     - make sure we can restart training from checkpoint(kinda done)
     - understand why we get a different validation dice score when restarting training from a checkpoint -->
+
+<!-- - add gaussian blur
+- train for longer from checkpoint
+- balance classes -->

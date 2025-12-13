@@ -17,7 +17,7 @@ from src.configs import (
 from src import configs as cfg
 
 
-class SemiSupervisedLoss:
+class SelfSupervisedLoss:
     """
     Computes a weighted average of mse loss of the images reconstruction, dice score and cross entropy.
     """
@@ -26,15 +26,12 @@ class SemiSupervisedLoss:
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=weight)
         self.train_cfg = train_cfg
 
-    def __call__(
-            self,
-            x: Tensor,
-            x_hat: Tensor,
-            mask: Tensor,
-            y_true: Tensor,
-        ) -> dict[str, Tensor]:
+    def __call__(self, forward_dict: dict[str, Any]) -> dict[str, Tensor]:
         # reconstruction loss
-        pix_wise_rec_loss = F.mse_loss(x_hat[:, 0], x[:, 0], reduction="none")
+        x = forward_dict["x"]
+        mask = forward_dict["mask"]
+        x_hat = forward_dict["x_hat"]
+        pix_wise_rec_loss = F.mse_loss(x_hat, x, reduction="none")
         pix_wise_rec_loss = pix_wise_rec_loss * mask[:, 0] / self.train_cfg.mask_ratio
         rec_loss = pix_wise_rec_loss.mean()
         return {

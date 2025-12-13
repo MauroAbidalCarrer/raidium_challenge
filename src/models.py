@@ -1,17 +1,19 @@
 from __future__ import annotations
 from itertools import repeat
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Any
 
 import torch
 import numpy as np
 from torch import Tensor, nn
 from einops import rearrange
+from torch.nn import functional as F
 from monai.networks.nets import UNet
 from einops.layers.torch import Rearrange
 from timm.models.layers import trunc_normal_
 from timm.models.vision_transformer import Block
 
 import src.configs as cfg
+
 
 def gather_batch(x: Tensor, idx: Tensor) -> Tensor:
     """
@@ -32,11 +34,11 @@ class PatchShuffleBF(nn.Module):
       - Input: patches (B, T, C)
       - Output: visible_patches (B, T_vis, C), forward_idx_bt (B, T), backward_idx_bt (B, T)
     """
-    def __init__(self, ratio: float) -> None:
+    def __init__(self, mask_ratio: float) -> None:
         super().__init__()
-        self.ratio = ratio
+        self.mask_ratio = mask_ratio
 
-    def forward(self, patches_bt: Tensor, mask_ratio: float) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(self, patches_bt: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """
         patches_bt: (B, T, C)
         returns:
@@ -50,8 +52,8 @@ class PatchShuffleBF(nn.Module):
         B, T, C = patches_bt.shape
         device = patches_bt.device
 
-        ratio = mask_ratio
-        T_vis = int(T * (1.0 - ratio))
+        mask_ratio = 0 if torch.is_inference_mode_enabled() else self.mask_ratio
+        T_vis = int(T * (1.0 - mask_ratio))
         if T_vis == T:
             # trivial: identity permutation
             forward_idx_bt = torch.arange(T, device=device).unsqueeze(0).expand(B, -1).contiguous()
@@ -71,7 +73,6 @@ class PatchShuffleBF(nn.Module):
         backward_idx_bt = forward_idx_bt.argsort(dim=1)      # (B, T)
 
         return visible, forward_idx_bt, backward_idx_bt
-
 
 class MAE_EncoderBF(nn.Module):
     def __init__(
@@ -113,7 +114,7 @@ class MAE_EncoderBF(nn.Module):
         trunc_normal_(self.cls_token, std=0.02)
         trunc_normal_(self.pos_embedding, std=0.02)
 
-    def forward(self, img: Tensor, mask_ratio: float) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(self, batch_dict: dict[str, Any]) -> Tuple[Tensor, Tensor, Tensor]:
         """
         img: (B, in_channels, H, W)
         returns:
@@ -121,17 +122,18 @@ class MAE_EncoderBF(nn.Module):
           - forward_idx_bt: (B, T)
           - backward_idx_bt: (B, T)
         """
-        B = img.shape[0]
+        x = batch_dict["x"]
+        B = x.shape[0]
 
         # patchify -> (B, C, h, w)
-        patches = self.patchify(img)  # (B, emb, h, w)
+        patches = self.patchify(x)  # (B, emb, h, w)
         patches = rearrange(patches, 'b c h w -> b (h w) c').contiguous()  # (B, T, C)
 
         # add pos embedding (broadcast over batch)
         patches = patches + self.pos_embedding  # (B, T, C)
 
         # shuffle and mask (batch-first)
-        visible, forward_idx_bt, backward_idx_bt = self.shuffle(patches, mask_ratio)  # visible: (B, T_vis, C)
+        visible, forward_idx_bt, backward_idx_bt = self.shuffle(patches)  # visible: (B, T_vis, C)
 
         # prepend cls token and run transformer
         cls = self.cls_token.expand(B, -1, -1).contiguous()  # (B,1,C)
@@ -141,7 +143,6 @@ class MAE_EncoderBF(nn.Module):
         features_bt = self.layer_norm(features_bt)
 
         return features_bt, forward_idx_bt, backward_idx_bt
-
 
 class MAE_DecoderBF(nn.Module):
     def __init__(
@@ -242,19 +243,18 @@ class MAE_DecoderBF(nn.Module):
 
         return img, mask_img
 
-
 class MAE_ViT(nn.Module):
     def __init__(
         self,
-        image_size: int = 32,
-        patch_size: int = 2,
+        image_size: int = 256,
+        patch_size: int = 16,
         emb_dim: int = 256,
         encoder_layer: int = 6,
         encoder_head: int = 8,
         decoder_layer: int = 3,
         decoder_head: int = 8,
         in_channels: int = 1,
-        out_channels: int = 1,
+        out_channels: int = cfg.N_CLASSES + 1,
     ):
         super().__init__()
         self.encoder = MAE_EncoderBF(
@@ -263,7 +263,7 @@ class MAE_ViT(nn.Module):
             emb_dim=emb_dim,
             num_layer=encoder_layer,
             num_head=encoder_head,
-            mask_ratio=None,
+            mask_ratio=0.75,
             in_channels=in_channels,
         )
         self.decoder = MAE_DecoderBF(
@@ -275,59 +275,78 @@ class MAE_ViT(nn.Module):
             out_channels=out_channels,
         )
 
-    def forward(self, img: Tensor, mask_ratio: float) -> Tuple[Tensor, Tensor]:
+    def forward(self, batch_dict: dict[str, Any]) -> dict[str, Tensor]:
         """
         img: (B, in_channels, H, W)
         returns:
           - predicted image: (B, out_ch, H, W)
           - mask image: (B, out_ch, H, W)
         """
-        features_bt, forward_idx_bt, backward_idx_bt = self.encoder(img, mask_ratio)
-        pred_img, mask_img = self.decoder(features_bt, backward_idx_bt)
-        return pred_img, mask_img
+        features_bt, forward_idx_bt, backward_idx_bt = self.encoder(batch_dict)
+        preds, mask = self.decoder(features_bt, backward_idx_bt)
+        output_dict = {
+            "x_hat": preds[:, :1],
+            "y_pred": preds[:, 1:],
+            "mask": mask,
+        }
+        return output_dict
 
-    @classmethod
-    def from_config(cls, model_cfg: cfg.ModelConfig, print_params_count: bool=False) -> "MAE_ViT":
-        model = cls(
-            image_size=256,
-            patch_size=16,
-            emb_dim=256,
-            out_channels=cfg.N_CLASSES + 1,
-            decoder_head=model_cfg.n_decoder_heads,
-            encoder_head=model_cfg.n_encoder_heads,
-            decoder_layer=model_cfg.n_encoder_layers,
-        ).to(cfg.DEVICE)
-        model.cfg = model_cfg
-        if print_params_count:
-            model_parameters = filter(lambda p: p.requires_grad, model.parameters())
-            params = sum([np.prod(p.size()) for p in model_parameters])
-            print("number of parameters:", str(params // 1e6) + "M")
-        return model
+class DownScalingWrapper(nn.Module):
 
-def mk_unet(model_cfg: cfg.ModelConfig) -> nn.Module:
+    def __init__(self, model: nn.Module, downscaling: int = 2):
+        super().__init__()
+        self.downscaling = downscaling
+        self.model = model
+    
+    def forward(self, batch_dict: dict[str, Any]) -> dict[str, Tensor]:
+        batch_dict = {
+            "x": F.max_pool2d(batch_dict["x"], self.downscaling, self.downscaling),
+        }
+        output_dict = self.model(batch_dict)
+        for output_k in ("x_hat", "mask", "y_pred"):
+            if output_k in output_dict:
+                output_dict[output_k] = F.interpolate(
+                    output_dict[output_k], 
+                    (256, 256),
+                )
+        return output_dict
+
+def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
     kwargs = model_cfg.constructor_kwargs
-    channels = kwargs["channels"]
-    model = (
-        UnetWrapper(
-            spatial_dims=2,
-            in_channels=1,
-            out_channels=cfg.N_CLASSES,
-            kernel_size=3,
-            strides=tuple(repeat(2, len(channels) - 1)),
-            bias=True,
-            **kwargs,
-            # channels=channels,
-            # num_res_units=model_cfg.num_res_units,
-            # act=model_cfg.act,
-            # norm=model_cfg.norm,
-            # dropout=model_cfg.dropout,
+    downscaling_remainder = 256 % (model_cfg.downscaling or 1)
+    assert downscaling_remainder == 0, f"Downscaling remainder must be 0, got {downscaling_remainder}."
+    if model_cfg.architecutre == "unet":
+        channels = kwargs["channels"]
+        model = (
+            UnetWrapper(
+                spatial_dims=2,
+                in_channels=1,
+                out_channels=cfg.N_CLASSES,
+                kernel_size=3,
+                strides=tuple(repeat(2, len(channels) - 1)),
+                bias=True,
+                **kwargs,
+            )
+            .to(cfg.DEVICE)
         )
-        .to(cfg.DEVICE)
-    )
+    elif model_cfg.architecutre == "mae_vit":
+        model = MAE_ViT(
+            image_size=256 // model_cfg.downscaling or 1,
+            **kwargs
+        )
+    if model_cfg.compile:
+        model = torch.compile(model)
+    if model_cfg.downscaling is not None:
+        model = DownScalingWrapper(model, model_cfg.downscaling)
     model.cfg = model_cfg
+    model = model.to(cfg.DEVICE)
     return model
-
 
 class UnetWrapper(UNet):
     def forward(self, batch_dict: dict[str, Tensor]) -> dict[str, Tensor]:
         return {"y_pred": super().forward(batch_dict["x"])}
+
+def print_params_count(model: nn.Module):
+    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    print("number of parameters:", str(params // 1e6) + "M")

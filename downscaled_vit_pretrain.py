@@ -11,27 +11,27 @@ def main():
         chkpt = torch.load(sys.argv[1], weights_only=False)
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
         model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
-        model = models.DownScaledViT(model_cfg.constructor_kwargs)
+        model = models.mk_model_from_cfg(model_cfg)
         model.load_state_dict(chkpt["model"])
         model.cfg = model_cfg
-        omptimizer_cfg = cfg.OPTIMIZER_CFGS["unet"]
-        optimizer = training.mk_optimizer(model, omptimizer_cfg)
+        omptim_cfg = chkpt["optimizer_cfg"]
+        optimizer = training.mk_optimizer(model, omptim_cfg)
         optimizer.load_state_dict(chkpt["optimizer"])
     else:
-        train_cfg = cfg.TRAIN_CONFIGS["unet_training"]
-        model_cfg = cfg.DFLT_MODELS_CFGS["unet"]
-        model = models.DownScaledViT(model_cfg.constructor_kwargs)
-        omptimizer_cfg = cfg.OPTIMIZER_CFGS["unet"]
-        optimizer = training.mk_optimizer(model, omptimizer_cfg)
+        train_cfg  = cfg.TRAIN_CONFIGS["downscaled_pretraining"]
+        model_cfg  = cfg.MODELS_CFGS["downscaled_pretraining"]
+        omptim_cfg = cfg.OPTIM_CFGS["downscaled_pretraining"]
+        optimizer  = training.mk_optimizer(model, omptim_cfg)
+        model = models.mk_model_from_cfg(model_cfg)
 
     lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
-    criterion = metrics.SegmentationLoss(train_cfg)
+    criterion = metrics.SelfSupervisedLoss(train_cfg)
     data_loaders = dataset.mk_data_loaders_for_segmentation(train_cfg)
     wandb_run = training.wandb_init(
         model_cfg,
         train_cfg,
-        omptimizer_cfg,
-        tags=cfg.WANDB_RUN_TAGS["unet"],
+        omptim_cfg,
+        tags=cfg.WANDB_RUN_TAGS["downscaled_pretraining"],
         group="manual_training",
     )
     trainer = training.Trainer(
@@ -49,10 +49,11 @@ def main():
         n_samples_per_epoch = n_btaches_per_epoch * train_cfg.batch_size
         trainer.epoch = chkpt.get("epoch", int(samples_seen // n_samples_per_epoch))
         trainer.step = chkpt.get("step", int(samples_seen // train_cfg.batch_size))
+    models.print_params_count(model)
     trainer.train_model(
         data_loaders,
         criterion,
-        "checkpoints/unet/{wandb_run_name}/unet_epoch_{epoch}.pt",
+        "checkpoints/pretraining/down_scaled_vit/{wandb_run_name}/pretrained_vit_epoch_{epoch}.pt",
     )
 
 

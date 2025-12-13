@@ -58,16 +58,15 @@ TRAIN_CONFIGS = {
             scale=(0.75, 2),
         )
     ),
-    "downscaled_pretraining": TrainingConfig(
-        batch_size=64,
-        n_epochs=5000,
-        transform=v2.RandomAffine(
-            degrees=(-20, 20),
-            translate=(0.1, 0.3),
-            scale=(0.75, 2),
-        ),
-
-    ),
+    # "downscaled_pretraining": TrainingConfig(
+    #     batch_size=128,
+    #     n_epochs=5000,
+    #     transform=v2.RandomAffine(
+    #         degrees=(-10, 10),
+    #         translate=(0.1, 0.3),
+    #         scale=(0.75, 2),
+    #     ),
+    # ),
     "finetuning": TrainingConfig(
         batch_size=64,
         n_epochs=600,
@@ -111,12 +110,18 @@ TRAIN_CONFIGS = {
     )
 }
 
-OPTIMIZER_CFGS = {
+OPTIM_CFGS = {
     "unet": OptimizerConfig(starting_lr=5e-4),
 }
 
 WANDB_RUN_TAGS = {
-    "unet": ["segmentation", "unet"]
+    "unet": ["segmentation", "unet"],
+    "downscaled_pretraining": [
+        "pretraining",
+        "downscaled",
+        "mae_vit",
+        "ssl"
+    ]
 }
 
 @dataclass
@@ -124,16 +129,18 @@ class ModelConfig:
     architecutre: str
     constructor_kwargs: dict
     compile: bool = True
+    downscaling: Optional[int] = None
 
-DFLT_MODELS_CFGS = {
-    "unet": ModelConfig(
-        architecutre="unet",
+MODELS_CFGS = {
+    "downscaled_vit": ModelConfig(
+        architecutre="mae_vit",
         constructor_kwargs={
             "channels": (64, 128, 256, 512),
             "num_res_units": 2,
             "act": ("leakyrelu", {"negative_slope": 0.01}),
             "norm": "instance",
-        }
+        },
+        downscaling=2,
     ),
     "unet": ModelConfig(
         architecutre="unet",

@@ -26,12 +26,6 @@ from src import configs as cfg
 from src.plotting import plt_sample
 
 
-# TODO:
-# - Add back transforms
-# - Add submission creation and submit
-# - Switch to one cycle lr
-
-
 PRETRAIN_WANDB_CFG = cfg.WandbConfig(["pretraining", "MAE"], "pretraining")
 def main():
     if len(sys.argv) > 1:
@@ -39,7 +33,7 @@ def main():
     else:
         trainer = mk_trainer_from_scratch()
     data_loaders = dataset.mk_semi_supervised_data_loaders(trainer.cfg)
-    criterion = metrics.SemiSupervisedLoss(trainer.cfg)
+    criterion = metrics.SelfSupervisedLoss(trainer.cfg)
     trainer.train_model(data_loaders, criterion, "checkpoints/pretrained/vit_epoch_{epoch}.pt")
 
 def mk_trainer_from_scratch() -> training.Trainer:

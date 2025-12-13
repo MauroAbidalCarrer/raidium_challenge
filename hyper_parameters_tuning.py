@@ -7,7 +7,7 @@ import optuna
 from optuna.trial import TrialState
 from sklearn.model_selection import train_test_split
 
-from src.models import mk_model
+from src.models import mk_model_from_cfg
 from src.training import train_model
 from src.metrics import SegmentationLoss
 from src import dataset
@@ -31,7 +31,7 @@ def main():
             trial.suggest_float("beta0", low=0.85, high=0.99),
             trial.suggest_float("beta1", low=0.9, high=0.999),
         )
-        model = torch.compile(mk_model(train_cfg, model_cfg))
+        model = torch.compile(mk_model_from_cfg(train_cfg, model_cfg))
         criterion = SegmentationLoss(train_cfg)
         x_train, x_valid, y_train, y_valid = train_test_split(
             x_train,

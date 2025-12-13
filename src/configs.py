@@ -62,13 +62,12 @@ TRAIN_CONFIGS = {
         batch_size=32,
         n_epochs=5000,
         transform=v2.Compose([
+            v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomAffine(
                 degrees=(-10, 10),
                 translate=(0.1, 0.3),
                 scale=(0.75, 2),
             ),
-            v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
-            v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
         ]),
     ),
     "finetuning": TrainingConfig(

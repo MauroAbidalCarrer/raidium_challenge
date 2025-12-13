@@ -31,7 +31,7 @@ class SelfSupervisedLoss:
         x = forward_dict["x"]
         mask = forward_dict["mask"]
         x_hat = forward_dict["x_hat"]
-        pix_wise_rec_loss = F.mse_loss(x_hat, x[:, 0], reduction="none")
+        pix_wise_rec_loss = F.mse_loss(x_hat, x, reduction="none")
         pix_wise_rec_loss = pix_wise_rec_loss * mask[:, 0] / self.train_cfg.mask_ratio
         rec_loss = pix_wise_rec_loss.mean()
         return {

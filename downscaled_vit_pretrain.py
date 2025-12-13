@@ -1,12 +1,15 @@
+import os
 import sys
 
 import torch
+from rich.traceback import install as install_rich_traceback
 
 from src import configs as cfg
 from src import dataset, training, models, metrics
 
 
 def main():
+    install_rich_traceback(width=300, extra_lines=1)
     if len(sys.argv) > 1:
         chkpt = torch.load(sys.argv[1], weights_only=False)
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
@@ -18,15 +21,15 @@ def main():
         optimizer = training.mk_optimizer(model, omptim_cfg)
         optimizer.load_state_dict(chkpt["optimizer"])
     else:
+        model_cfg  = cfg.MODELS_CFGS["downscaled_vit"]
+        omptim_cfg = cfg.OPTIM_CFGS["downscaled_vit_pretraining"]
         train_cfg  = cfg.TRAIN_CONFIGS["downscaled_pretraining"]
-        model_cfg  = cfg.MODELS_CFGS["downscaled_pretraining"]
-        omptim_cfg = cfg.OPTIM_CFGS["downscaled_pretraining"]
-        optimizer  = training.mk_optimizer(model, omptim_cfg)
         model = models.mk_model_from_cfg(model_cfg)
+        optimizer  = training.mk_optimizer(model, omptim_cfg)
 
     lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
     criterion = metrics.SelfSupervisedLoss(train_cfg)
-    data_loaders = dataset.mk_data_loaders_for_segmentation(train_cfg)
+    data_loaders = dataset.mk_semi_supervised_data_loaders(train_cfg)
     wandb_run = training.wandb_init(
         model_cfg,
         train_cfg,
@@ -34,6 +37,7 @@ def main():
         tags=cfg.WANDB_RUN_TAGS["downscaled_pretraining"],
         group="manual_training",
     )
+    print(wandb_run.name)
     trainer = training.Trainer(
         model,
         train_cfg, 

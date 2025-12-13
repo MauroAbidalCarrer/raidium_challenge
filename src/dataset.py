@@ -69,15 +69,11 @@ def mk_samples_weights(x_train_with_labels: Tensor, y_train_with_labels: Tensor)
     y_classes = cls_presence_mask(y_train_with_labels)
     class_counts = y_classes.sum(dim=0, keepdim=True)
     cls_weight = 1 / (class_counts + 1e-8)
-    cls_weight
-    # normed_cls_weight = cls_weight / cls_weight.sum()
     sample_weights = (y_classes * cls_weight).sum(dim=1)
     return sample_weights
 
 def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, DataLoader]:
     x_train, y_train, x_test = load_raw_dataset(DEVICE)
-    if not all(map(lambda t: t.dtype == torch.uint8, (x_train, x_test, y_train))):
-        raise ValueError("Not all raw tensors are of dtype uint8.")
     x_train, x_valid, y_train, y_valid = train_test_split(
         x_train,
         y_train,

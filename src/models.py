@@ -1,5 +1,5 @@
-from itertools import repeat
 from __future__ import annotations
+from itertools import repeat
 from typing import Tuple, Optional, Any
 
 import torch
@@ -133,7 +133,7 @@ class MAE_EncoderBF(nn.Module):
         patches = patches + self.pos_embedding  # (B, T, C)
 
         # shuffle and mask (batch-first)
-        visible, forward_idx_bt, backward_idx_bt = self.shuffle(patches, mask_ratio)  # visible: (B, T_vis, C)
+        visible, forward_idx_bt, backward_idx_bt = self.shuffle(patches)  # visible: (B, T_vis, C)
 
         # prepend cls token and run transformer
         cls = self.cls_token.expand(B, -1, -1).contiguous()  # (B,1,C)
@@ -283,24 +283,31 @@ class MAE_ViT(nn.Module):
           - mask image: (B, out_ch, H, W)
         """
         features_bt, forward_idx_bt, backward_idx_bt = self.encoder(batch_dict)
-        x_hat, mask = self.decoder(features_bt, backward_idx_bt)
-        output_dict = {"x_hat": x_hat, "mask": mask}
+        preds, mask = self.decoder(features_bt, backward_idx_bt)
+        output_dict = {
+            "x_hat": preds[:, :1],
+            "y_pred": preds[:, 1:],
+            "mask": mask,
+        }
         return output_dict
 
 class DownScalingWrapper(nn.Module):
 
     def __init__(self, model: nn.Module, downscaling: int = 2):
+        super().__init__()
         self.downscaling = downscaling
         self.model = model
     
     def forward(self, batch_dict: dict[str, Any]) -> dict[str, Tensor]:
-        batch_dict["x"] = F.max_pool2d(batch_dict["x"], self.downscaling, self.downscaling)
+        batch_dict = {
+            "x": F.max_pool2d(batch_dict["x"], self.downscaling, self.downscaling),
+        }
         output_dict = self.model(batch_dict)
         for output_k in ("x_hat", "mask", "y_pred"):
             if output_k in output_dict:
                 output_dict[output_k] = F.interpolate(
                     output_dict[output_k], 
-                    (*output_dict[output_k].shape[:-2], 256, 256),
+                    (256, 256),
                 )
         return output_dict
 
@@ -308,7 +315,7 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
     kwargs = model_cfg.constructor_kwargs
     downscaling_remainder = 256 % (model_cfg.downscaling or 1)
     assert downscaling_remainder == 0, f"Downscaling remainder must be 0, got {downscaling_remainder}."
-    if model_cfg["architecture"] == "unet":
+    if model_cfg.architecutre == "unet":
         channels = kwargs["channels"]
         model = (
             UnetWrapper(
@@ -322,7 +329,7 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
             )
             .to(cfg.DEVICE)
         )
-    elif model_cfg["architecture"] == "mae_vit":
+    elif model_cfg.architecutre == "mae_vit":
         model = MAE_ViT(
             image_size=256 // model_cfg.downscaling or 1,
             **kwargs
@@ -332,6 +339,7 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
     if model_cfg.downscaling is not None:
         model = DownScalingWrapper(model, model_cfg.downscaling)
     model.cfg = model_cfg
+    model = model.to(cfg.DEVICE)
     return model
 
 class UnetWrapper(UNet):

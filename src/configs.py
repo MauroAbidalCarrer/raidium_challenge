@@ -58,15 +58,19 @@ TRAIN_CONFIGS = {
             scale=(0.75, 2),
         )
     ),
-    # "downscaled_pretraining": TrainingConfig(
-    #     batch_size=128,
-    #     n_epochs=5000,
-    #     transform=v2.RandomAffine(
-    #         degrees=(-10, 10),
-    #         translate=(0.1, 0.3),
-    #         scale=(0.75, 2),
-    #     ),
-    # ),
+    "downscaled_pretraining": TrainingConfig(
+        batch_size=32,
+        n_epochs=5000,
+        transform=v2.Compose([
+            v2.RandomAffine(
+                degrees=(-10, 10),
+                translate=(0.1, 0.3),
+                scale=(0.75, 2),
+            ),
+            v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
+            v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
+        ]),
+    ),
     "finetuning": TrainingConfig(
         batch_size=64,
         n_epochs=600,
@@ -112,6 +116,7 @@ TRAIN_CONFIGS = {
 
 OPTIM_CFGS = {
     "unet": OptimizerConfig(starting_lr=5e-4),
+    "downscaled_vit_pretraining": OptimizerConfig(starting_lr=2e-4),
 }
 
 WANDB_RUN_TAGS = {
@@ -127,19 +132,13 @@ WANDB_RUN_TAGS = {
 @dataclass
 class ModelConfig:
     architecutre: str
-    constructor_kwargs: dict
-    compile: bool = True
+    compile: bool = False
+    constructor_kwargs: dict = field(default_factory=dict)
     downscaling: Optional[int] = None
 
 MODELS_CFGS = {
     "downscaled_vit": ModelConfig(
         architecutre="mae_vit",
-        constructor_kwargs={
-            "channels": (64, 128, 256, 512),
-            "num_res_units": 2,
-            "act": ("leakyrelu", {"negative_slope": 0.01}),
-            "norm": "instance",
-        },
         downscaling=2,
     ),
     "unet": ModelConfig(

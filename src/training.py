@@ -189,7 +189,7 @@ class Trainer:
             seg_y_true.append(batch_dict["y_true"].squeeze().cpu().numpy())
             seg_preds.append(pred.squeeze().cpu().numpy())
         with timing.time_to_run("evaluation/mk_eval_dict"):
-            eval_dict =  {k: v.mean().item() for k, v in eval_dict.items()}
+            eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
             eval_dict["training_samples_seen"] = self.training_samples_seen
         with timing.time_to_run("evaluation/dice_score"):
             seg_preds = np.concat(seg_preds).reshape(-1 , 256 * 256)

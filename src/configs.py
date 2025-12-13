@@ -71,25 +71,24 @@ TRAIN_CONFIGS = {
         ]),
     ),
     "finetuning": TrainingConfig(
-        batch_size=32,
+        batch_size=64,
         n_epochs=600,
         dice_loss_weight = 2,
         cross_entropy_loss_weight= 1,
         mask_ratio = 0,
         use_cls_balanced_sampler = True,
         transform=v2.Compose([
-            v2.RandomErasing(ratio=(0.05, 0.15)),
-            v2.RandomErasing(ratio=(0.05, 0.15)),
-            v2.RandomErasing(ratio=(0.05, 0.15)),
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
-            v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
-            v2.RandomAffine(
-                degrees=(-20, 20),
-                translate=(0.1, 0.3),
-                scale=(0.75, 2),
-            ),
-            v2.RandomErasing(ratio=(0.05, 0.15), value="random"),
-            v2.RandomErasing(ratio=(0.05, 0.15), value="random"),
+            v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
         ]),
     ),
     "unet_training": TrainingConfig(
@@ -118,7 +117,7 @@ TRAIN_CONFIGS = {
 OPTIM_CFGS = {
     "unet": OptimizerConfig(starting_lr=5e-4),
     "downscaled_vit_pretraining": OptimizerConfig(starting_lr=2e-4),
-    "finetuning": OptimizerConfig(starting_lr=2e-4),
+    "finetuning": OptimizerConfig(starting_lr=5e-4),
 }
 
 WANDB_RUN_TAGS = {

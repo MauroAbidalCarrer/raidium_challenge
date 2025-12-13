@@ -11,22 +11,22 @@ def main():
         chkpt = torch.load(sys.argv[1], weights_only=False)
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
         model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
-        model = models.mk_unet(model_cfg)
+        model = models.mk_model_from_cfg(model_cfg)
         model.load_state_dict(chkpt["model"])
         model.cfg = model_cfg
-        omptimizer_cfg = cfg.OPTIMIZER_CFGS["unet"]
+        omptimizer_cfg = cfg.OPTIM_CFGS["unet"]
         optimizer = training.mk_optimizer(model, omptimizer_cfg)
         optimizer.load_state_dict(chkpt["optimizer"])
     else:
         train_cfg = cfg.TRAIN_CONFIGS["unet_training"]
-        model_cfg = cfg.DFLT_MODELS_CFGS["unet"]
-        model = models.mk_unet(model_cfg)
-        omptimizer_cfg = cfg.OPTIMIZER_CFGS["unet"]
+        model_cfg = cfg.MODELS_CFGS["unet"]
+        model = models.mk_model_from_cfg(model_cfg)
+        omptimizer_cfg = cfg.OPTIM_CFGS["unet"]
         optimizer = training.mk_optimizer(model, omptimizer_cfg)
 
     lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
     criterion = metrics.SegmentationLoss(train_cfg)
-    data_loaders = dataset.mk_data_loaders_for_segmentation(train_cfg)
+    data_loaders = dataset.mk_segmentation_data_loaders(train_cfg)
     wandb_run = training.wandb_init(
         model_cfg,
         train_cfg,

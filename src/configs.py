@@ -91,7 +91,7 @@ TRAIN_CONFIGS = {
         # optim_cfg=OptimizerConfig(OPTIMIZER_CFGS=2e-4)
     ),
     "unet_training": TrainingConfig(
-        batch_size=128,
+        batch_size=64,
         n_epochs=2000,
         dice_loss_weight = 2,
         cross_entropy_loss_weight= 1,

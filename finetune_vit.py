@@ -38,7 +38,7 @@ def main():
     chkpt_pth = sys.argv[1]
     checkpt_dict = torch.load(chkpt_pth, weights_only=False)
     train_cfg = cfg.TRAIN_CONFIGS["finetuning"]
-    data_loaders = dataset.mk_data_loaders_for_segmentation(train_cfg)
+    data_loaders = dataset.mk_segmentation_data_loaders(train_cfg)
     model_cfg = cfg.ModelConfig(**checkpt_dict["model_cfg"])
     model = models.MAE_ViT.from_config(model_cfg)
     model.load_state_dict(checkpt_dict["model"])

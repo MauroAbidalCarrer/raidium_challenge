@@ -23,7 +23,7 @@ from src.configs import TrainingConfig, DEVICE
 from sklearn.model_selection import train_test_split
 
 
-def mk_data_loaders_for_segmentation(
+def mk_segmentation_data_loaders(
         train_cfg: cfg.TrainingConfig
     ) -> dict[str, DataLoader]:
     x_train, y_train, x_test = load_raw_dataset(cfg.DEVICE)
@@ -38,7 +38,7 @@ def mk_data_loaders_for_segmentation(
         print("WARNING: no 'use_cls_balanced_samplerr' param in train config defaulting to False.")
     if getattr(train_cfg, "use_cls_balanced_samplerr", False):
         print("Using weighted random sampler.")
-        samples_weights = mk_samples_weights(x_train, y_train)
+        samples_weights = mk_samples_weights(y_train)
         train_sampler = WeightedRandomSampler(
             samples_weights, 
             num_samples=len(samples_weights),
@@ -59,7 +59,7 @@ def mk_dl_from_tensors(*tensors: list[Tensor], **data_loader_kwargs) -> DataLoad
     dataset = TensorDataset(*tensors)
     return DataLoader(dataset, **data_loader_kwargs)
 
-def mk_samples_weights(x_train_with_labels: Tensor, y_train_with_labels: Tensor) -> Tensor:
+def mk_samples_weights(y_train_with_labels: Tensor) -> Tensor:
     """Takes in x and y with removed samples without labels and returns per sample weights."""
     def cls_presence_mask(y_train: Tensor) -> Tensor:
         cls_presence = torch.empty(y_train.shape[0], cfg.N_CLASSES)
@@ -78,6 +78,7 @@ def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, Data
         x_train,
         y_train,
         test_size=train_cfg.test_size,
+        random_state=train_cfg.random_state,
     )
     x_train = torch.cat((x_train, x_test))
     y_test_zeros = torch.zeros(

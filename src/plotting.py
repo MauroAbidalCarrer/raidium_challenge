@@ -69,23 +69,24 @@ def plt_recon_imgs_matplotlib(
     batch["x"] = transform(batch["x"])
     model_output = model(batch)
     x = batch["x"]
-    mask = model_output["mask"]
+    mask = model_output["mask"][:, :1]
     x_hat = model_output["x_hat"]
-    x = x * (1 - mask)
+    masked_x = x * (1 - mask)
     x_hat = x_hat * mask + x * (1 - mask)
     # B, C, H, W → B, H, W
     x = x.detach().cpu().numpy().squeeze()[:n_imgs_to_plt]
-    mask = mask.detach().cpu().numpy().squeeze()[:n_imgs_to_plt]
+    masked_x = masked_x.detach().cpu().numpy().squeeze()[:n_imgs_to_plt]
     x_hat = x_hat.detach().cpu().numpy().squeeze()[:n_imgs_to_plt]
     fig, axes = plt.subplots(
-        n_rows=2,
-        n_cols=x.shape[0],
-        figsize=(3 * ax_size, x.shape[0] * ax_size),
+        nrows=3,
+        ncols=x.shape[0],
+        figsize=(x.shape[0] * ax_size, 3 * ax_size),
         squeeze=False
     )
-    for sample_i, (x_samp, mask_samp, x_hat_samp) in enumerate(zip(x, mask, x_hat)):
-        axes[0, sample_i].imshow(x, cmap="gray")
-        axes[1, sample_i].imshow(x_hat, cmap="gray")
+    for sample_i, (x_samp, masked_x_samp, x_hat_samp) in enumerate(zip(x, masked_x, x_hat)):
+        axes[0, sample_i].imshow(x_samp, cmap="rainbow")
+        axes[1, sample_i].imshow(masked_x_samp, cmap="rainbow")
+        axes[2, sample_i].imshow(x_hat_samp, cmap="rainbow")
     plt.tight_layout()
     plt.show()
 

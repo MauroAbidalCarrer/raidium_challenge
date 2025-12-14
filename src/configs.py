@@ -45,6 +45,7 @@ class TrainingConfig:
     transform: v2.Transform = v2.Identity()
     use_cls_weights_for_dice: bool = False
     use_cls_balanced_sampler: bool = False
+    include_backgroud: Optional[bool] = None
 
 TRAIN_CONFIGS = {
     "pretraining": TrainingConfig(
@@ -78,6 +79,7 @@ TRAIN_CONFIGS = {
         mask_ratio = 0,
         use_cls_balanced_sampler = True,
         use_cls_weights_for_dice = False,
+        include_backgroud = False,
         transform=v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),

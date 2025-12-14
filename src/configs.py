@@ -1,10 +1,10 @@
 from typing import (
     Optional,
     Callable,
-    Dict,
+    Literal,
     Tuple,
+    Dict,
 )
-from typing import Sequence
 from dataclasses import dataclass, field
 
 import torch
@@ -19,6 +19,8 @@ N_MODEL_OUT_CHANNELS = N_CLASSES + 1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 criterion_t = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
 CONFUSE_MAT_METRICS_NAMES = ["recall", "precision", "f1 score"]
+X_MEAN: float = 14.0816
+X_STD: float = 35.2164
 
 
 @dataclass
@@ -38,14 +40,11 @@ class TrainingConfig:
     rec_loss_weight: float = 1
     mask_ratio: float = 0.75
     random_state: int = 0
-    # optim_cfg: OptimizerConfig=field(default_factory=OptimizerConfig)
-    #TODO: Remove start lr and other optimizer values in train cfg and move them to appropriate cfg classes
-    # start_lr: float=2e-4
     max_lr: float=1e-3
     n_warmup_epochs: int = 50
     transform: v2.Transform = v2.Identity()
     use_cls_weights_for_dice: bool = False
-    use_cls_balanced_sampler: bool = False
+    sampling: Optional[Literal["weighted", "uniform", "shuffle"]] = None
     include_backgroud: Optional[bool] = None
 
 TRAIN_CONFIGS = {
@@ -78,7 +77,7 @@ TRAIN_CONFIGS = {
         dice_loss_weight = 0.2,
         cross_entropy_loss_weight= 2,
         mask_ratio = 0,
-        use_cls_balanced_sampler = True,
+        sampling = "uniform",
         use_cls_weights_for_dice = False,
         include_backgroud = False,
         transform=v2.Compose([
@@ -101,7 +100,7 @@ TRAIN_CONFIGS = {
         dice_loss_weight = 2,
         cross_entropy_loss_weight= 1,
         mask_ratio = 0,
-        use_cls_balanced_sampler = True,
+        sampling = "uniform",
         transform = v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),

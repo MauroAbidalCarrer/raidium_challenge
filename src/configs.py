@@ -75,8 +75,8 @@ TRAIN_CONFIGS = {
     "finetuning": TrainingConfig(
         batch_size=64,
         n_epochs=2000,
-        dice_loss_weight = 1,
-        cross_entropy_loss_weight= 3,
+        dice_loss_weight = 2,
+        cross_entropy_loss_weight= 1,
         mask_ratio = 0,
         sampling = "uniform",
         use_cls_weights_for_dice = False,

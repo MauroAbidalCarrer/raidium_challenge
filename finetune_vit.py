@@ -22,6 +22,7 @@ def main():
         model = models.mk_model_from_cfg(model_cfg)
         model.load_state_dict(chkpt["model"])
         optimizer = training.mk_optimizer(model, optim_cfg)
+        train_cfg.pretrained_checkpoint_pth = chkpt_pth
     elif "finetuning" in chkpt_pth:
         optim_cfg = cfg.OPTIM_CFGS["finetuning"]
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])

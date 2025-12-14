@@ -15,21 +15,20 @@ ideas:
 
 todo:
 - in parallel:
+    - confusion matrix metrics
+    - uniform class sampling
     - Get better score with unet:
         - decrease test size
-    - ViT pretraining with downscaled image
     - TTA
-at the end of the competion:
 
-submissions:
+at the end of the competion:
 - today:
-    - high score unet
-    - unet with blur+balanced sampling
     - unet TTA
 - tomorrow:
     - downscaled vit?
     - unet or vit TTA
 
+submissions:
 - make the repo veeeeeeeery clean, so I can flex it to everyone
     - create a second repo and delete this one?
     - Try to use monai loss/metrics when possible to reduce code base size.
@@ -54,3 +53,4 @@ submissions:
 <!-- - add gaussian blur
 - train for longer from checkpoint
 - balance classes -->
+<!-- - ViT pretraining with downscaled image -->

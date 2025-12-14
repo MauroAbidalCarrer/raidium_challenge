@@ -228,24 +228,24 @@ class Trainer:
         if "confuse_mat_metric" in data:
             confuse_mat_metrics: list[Tensor] = data["confuse_mat_metric"]
             del data["confuse_mat_metric"]
-            confuse_mat_metrics = (
-                torch.stack(confuse_mat_metrics)
-                .cpu()
-                .numpy()
-                .tolist()
-            )
-            cls_indices = list(range(cfg.N_CLASSES))
-            for metric_name, metric_values in zip(cfg.CONFUSE_MAT_METRICS_NAMES, confuse_mat_metrics):
-                confuse_mat_metric_table = wandb.Table(
-                    data=list(zip(cls_indices, metric_values)),
-                    columns=["cls_idx", f"{metric_name}_value"],
-                )
-                # data[metric_name] = wandb.plot.bar(
-                #     confuse_mat_metric_table,
-                #     value="cls_idx",
-                #     label=f"{metric_name}_value",
-                #     title=metric_name,
-                # )
+        #     confuse_mat_metrics = (
+        #         torch.stack(confuse_mat_metrics)
+        #         .cpu()
+        #         .numpy()
+        #         .tolist()
+        #     )
+        #     cls_indices = list(range(cfg.N_CLASSES))
+        #     for metric_name, metric_values in zip(cfg.CONFUSE_MAT_METRICS_NAMES, confuse_mat_metrics):
+        #         confuse_mat_metric_table = wandb.Table(
+        #             data=list(zip(cls_indices, metric_values)),
+        #             columns=["cls_idx", f"{metric_name}_value"],
+        #         )
+        #         data[metric_name] = wandb.plot.bar(
+        #             confuse_mat_metric_table,
+        #             value="cls_idx",
+        #             label=f"{metric_name}_value",
+        #             title=metric_name,
+        #         )
         data_with_prefix = {prefix + "/" + k: v for k, v in data.items()}
         trainer_data = {
             "training/epoch": self.epoch,

@@ -45,7 +45,7 @@ class TrainingConfig:
     transform: v2.Transform = v2.Identity()
     use_cls_weights_for_dice: bool = False
     sampling: Optional[Literal["weighted", "uniform", "shuffle"]] = None
-    include_backgroud: Optional[bool] = None
+    include_backgroud: Optional[bool] = True
 
 TRAIN_CONFIGS = {
     "pretraining": TrainingConfig(
@@ -74,12 +74,12 @@ TRAIN_CONFIGS = {
     "finetuning": TrainingConfig(
         batch_size=64,
         n_epochs=2000,
-        dice_loss_weight = 0.2,
-        cross_entropy_loss_weight= 2,
+        dice_loss_weight = 1,
+        cross_entropy_loss_weight= 3,
         mask_ratio = 0,
         sampling = "uniform",
         use_cls_weights_for_dice = False,
-        include_backgroud = False,
+        include_backgroud = True,
         transform=v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),

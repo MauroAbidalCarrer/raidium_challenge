@@ -46,6 +46,7 @@ class TrainingConfig:
     use_cls_weights_for_dice: bool = False
     sampling: Optional[Literal["weighted", "uniform", "shuffle"]] = None
     include_backgroud: Optional[bool] = True
+    dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
 
 TRAIN_CONFIGS = {
     "pretraining": TrainingConfig(
@@ -80,6 +81,7 @@ TRAIN_CONFIGS = {
         sampling = "uniform",
         use_cls_weights_for_dice = False,
         include_backgroud = True,
+        dice_loss="generalized_monai",
         transform=v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
@@ -101,6 +103,7 @@ TRAIN_CONFIGS = {
         cross_entropy_loss_weight= 1,
         mask_ratio = 0,
         sampling = "weighted",
+        dice_loss = "generalized_monai",
         transform = v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),

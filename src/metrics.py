@@ -1,8 +1,10 @@
 import json
 import warnings
+from functools import partial
 from typing import Optional, Any
 
 import torch
+import monai
 import numpy as np
 import pandas as pd
 from torch import Tensor
@@ -85,6 +87,21 @@ class SegmentationLoss:
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss(weight=class_weights)
         if self.train_cfg.use_cls_weights_for_dice:
             print("Going to apply class weights to dice loss.")
+        print("dice loss method:", train_cfg.dice_loss)
+        if train_cfg.dice_loss == "generalized_monai":
+            self.dice_loss = monai.losses.GeneralizedDiceLoss(
+                train_cfg.include_backgroud,
+                softmax=True,
+                to_onehot_y=True,
+            )
+        elif train_cfg.dice_loss == "custom":
+            self.dice_loss = partial(
+                torch_dice_loss,
+                class_weights=self.class_weights if self.train_cfg.use_cls_weights_for_dice else None,
+                inclue_background=self.train_cfg.include_backgroud,
+            )
+        else:
+            raise NotImplementedError(f"Dice loss '{train_cfg.dice_loss}' not implemented.")
     
     def __call__(self, forward_dict: dict[str, Any]) -> dict[str, Tensor]:
         """
@@ -95,12 +112,7 @@ class SegmentationLoss:
         y_true = forward_dict["y_true"].long()
         y_pred = forward_dict["y_pred"]
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
-        dice_loss = torch_dice_loss(
-            y_pred,
-            y_true,
-            class_weights=self.class_weights if self.train_cfg.use_cls_weights_for_dice else None,
-            inclue_background=self.train_cfg.include_backgroud,
-        )
+        dice_loss = self.dice_loss(y_pred, y_true.unsqueeze(1))
         loss = dice_loss * self.train_cfg.dice_loss_weight \
             + ce_loss * self.train_cfg.cross_entropy_loss_weight
         return {

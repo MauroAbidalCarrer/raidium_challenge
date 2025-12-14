@@ -166,8 +166,9 @@ class Trainer:
         """
         self.model = self.model.eval()
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
-        test_infer_dict  = self.evaluate_model_on_single_split(data_loaders["test"],  criterion)
         valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
+        with torch.inference_mode():
+            test_infer_dict  = self.evaluate_model_on_single_split(data_loaders["test"],  criterion)
         self.wandb_log_dict_with_prefix(valid_eval_dict, "validation")
         self.wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test")
         self.wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid")
@@ -199,9 +200,8 @@ class Trainer:
             pred = torch.argmax(model_output_dict["y_pred"], dim=1)
             seg_y_true.append(batch_dict["y_true"].squeeze().cpu().numpy())
             seg_preds.append(pred.squeeze().cpu().numpy())
-        with timing.time_to_run("evaluation/mk_eval_dict"):
-            eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
-            eval_dict["training_samples_seen"] = self.training_samples_seen
+        eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
+        eval_dict["training_samples_seen"] = self.training_samples_seen
         with timing.time_to_run("evaluation/dice_score"):
             seg_preds = np.concat(seg_preds).reshape(-1 , 256 * 256)
             seg_y_true = np.concat(seg_y_true).reshape(-1, 256 * 256)

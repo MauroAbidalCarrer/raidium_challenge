@@ -63,7 +63,7 @@ def main():
     trainer.train_model(
         data_loaders,
         criterion,
-        "checkpoints/finetuning/down_scaled_vit/{wandb_run_name}/pretrained_vit_epoch_{epoch}.pt",
+        "checkpoints/finetuning/down_scaled_vit/{wandb_run_name}/finetuned_vit_epoch_{epoch}.pt",
     )
 
 

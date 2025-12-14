@@ -16,7 +16,6 @@ ideas:
 todo:
 - in parallel:
     - confusion matrix metrics
-    - uniform class sampling
     - Get better score with unet:
         - decrease test size
     - TTA
@@ -54,3 +53,4 @@ submissions:
 - train for longer from checkpoint
 - balance classes -->
 <!-- - ViT pretraining with downscaled image -->
+<!-- - uniform class sampling -->

@@ -154,7 +154,7 @@ class Trainer:
             loss_dict["loss"].backward()
         loss_norm = torch.nn.utils.clip_grad_norm_(
             self.model.parameters(),
-            1.0, # TODO: Hypertune this
+            self.cfg.max_loss_norm,
         )
         self.confuse_mat_metric_step(batch_dict, model_output_dict)
         self.optimizer.step()

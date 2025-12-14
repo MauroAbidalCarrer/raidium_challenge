@@ -46,6 +46,8 @@ class TrainingConfig:
     use_cls_weights_for_dice: bool = False
     sampling: Optional[Literal["weighted", "uniform", "shuffle"]] = None
     include_backgroud: Optional[bool] = True
+    dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
+    max_loss_norm: float = 1
 
 TRAIN_CONFIGS = {
     "pretraining": TrainingConfig(
@@ -74,12 +76,14 @@ TRAIN_CONFIGS = {
     "finetuning": TrainingConfig(
         batch_size=64,
         n_epochs=2000,
-        dice_loss_weight = 1,
-        cross_entropy_loss_weight= 3,
+        dice_loss_weight = 2,
+        cross_entropy_loss_weight= 1,
         mask_ratio = 0,
         sampling = "uniform",
         use_cls_weights_for_dice = False,
         include_backgroud = True,
+        dice_loss="monai",
+        max_loss_norm = 2,
         transform=v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
@@ -96,11 +100,12 @@ TRAIN_CONFIGS = {
     ),
     "unet_training": TrainingConfig(
         batch_size=64,
-        n_epochs=2000,
+        n_epochs=4000,
         dice_loss_weight = 2,
         cross_entropy_loss_weight= 1,
         mask_ratio = 0,
-        sampling = "weighted",
+        sampling = "uniform",
+        dice_loss = "generalized_monai",
         transform = v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
@@ -155,7 +160,7 @@ MODELS_CFGS = {
     "unet": ModelConfig(
         architecutre="unet",
         constructor_kwargs={
-            "channels": (64, 128, 256, 512),
+            "channels": (64, 128, 256, 512, 512),
             "num_res_units": 2,
             "act": ("leakyrelu", {"negative_slope": 0.01}),
             "norm": "instance",

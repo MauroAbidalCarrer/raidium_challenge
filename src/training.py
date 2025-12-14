@@ -7,6 +7,7 @@ from collections import defaultdict
 import torch
 import wandb
 import numpy as np
+import pandas as pd
 from torch import nn, Tensor
 from monai import metrics as monai_metrics
 from rich.progress import track
@@ -225,12 +226,26 @@ class Trainer:
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
         if "confuse_mat_metric" in data:
-            confuse_mat_metric: list[Tensor] = data["confuse_mat_metric"]
+            confuse_mat_metrics: list[Tensor] = data["confuse_mat_metric"]
             del data["confuse_mat_metric"]
-            for metric_idx, metric_name in enumerate(cfg.CONFUSE_MAT_METRICS_NAMES):
-                confuse_mat_metric[metric_idx] = confuse_mat_metric[metric_idx].tolist()
-                for cls_idx in range(cfg.N_CLASSES):
-                    data[f"{metric_name}/{cls_idx}"] = confuse_mat_metric[metric_idx][cls_idx]
+            confuse_mat_metrics = (
+                torch.stack(confuse_mat_metrics)
+                .cpu()
+                .numpy()
+                .tolist()
+            )
+            cls_indices = list(range(cfg.N_CLASSES))
+            for metric_name, metric_values in zip(cfg.CONFUSE_MAT_METRICS_NAMES, confuse_mat_metrics):
+                confuse_mat_metric_table = wandb.Table(
+                    data=list(zip(cls_indices, metric_values)),
+                    columns=["cls_idx", f"{metric_name}_value"],
+                )
+                # data[metric_name] = wandb.plot.bar(
+                #     confuse_mat_metric_table,
+                #     value="cls_idx",
+                #     label=f"{metric_name}_value",
+                #     title=metric_name,
+                # )
         data_with_prefix = {prefix + "/" + k: v for k, v in data.items()}
         trainer_data = {
             "training/epoch": self.epoch,

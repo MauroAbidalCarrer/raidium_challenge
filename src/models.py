@@ -248,6 +248,7 @@ class MAE_ViT(nn.Module):
         self,
         image_size: int = 256,
         patch_size: int = 16,
+        mask_ratio: int = 0.75,
         emb_dim: int = 256,
         encoder_layer: int = 6,
         encoder_head: int = 8,
@@ -263,7 +264,7 @@ class MAE_ViT(nn.Module):
             emb_dim=emb_dim,
             num_layer=encoder_layer,
             num_head=encoder_head,
-            mask_ratio=0.75,
+            mask_ratio=mask_ratio,
             in_channels=in_channels,
         )
         self.decoder = MAE_DecoderBF(
@@ -297,7 +298,7 @@ class DownScalingWrapper(nn.Module):
         super().__init__()
         self.downscaling = downscaling
         self.model = model
-    
+
     def forward(self, batch_dict: dict[str, Any]) -> dict[str, Tensor]:
         batch_dict = {
             "x": F.max_pool2d(batch_dict["x"], self.downscaling, self.downscaling),
@@ -306,7 +307,7 @@ class DownScalingWrapper(nn.Module):
         for output_k in ("x_hat", "mask", "y_pred"):
             if output_k in output_dict:
                 output_dict[output_k] = F.interpolate(
-                    output_dict[output_k], 
+                    output_dict[output_k],
                     (256, 256),
                 )
         return output_dict

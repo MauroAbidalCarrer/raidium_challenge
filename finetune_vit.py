@@ -1,67 +1,68 @@
-import os
 import sys
-import math
-from tqdm import tqdm
-from pathlib import Path
-from typing import Any, overload
-from collections import defaultdict
 
 import torch
-import wandb
-import numpy as np
-from torch import nn, Tensor
-import torch.nn.functional as F
-from torch.optim.lr_scheduler import OneCycleLR
-from sklearn.model_selection import train_test_split
-from torch.utils.data import TensorDataset, DataLoader
+from rich.traceback import install as install_rich_traceback
 
-from src import (
-    dataset,
-    training,
-    metrics,
-    models,
-)
 from src import configs as cfg
-from src.plotting import plt_sample
-
-
-# TODO:
-# - Add finetuning
-# - Add submission creation and submit
-# - Switch to one cycle lr
+from src import dataset, training, models, metrics
 
 
 def main():
+    install_rich_traceback(width=300, extra_lines=1)
     if len(sys.argv) < 2:
-        print("Please provide a path to a pretrained ViT checkpoint.")
+        print("ERROR: Please provide path to pretrained MAE ViT checkpoint.")
         exit(1)
     chkpt_pth = sys.argv[1]
-    checkpt_dict = torch.load(chkpt_pth, weights_only=False)
-    train_cfg = cfg.TRAIN_CONFIGS["finetuning"]
-    data_loaders = dataset.mk_segmentation_data_loaders(train_cfg)
-    model_cfg = cfg.ModelConfig(**checkpt_dict["model_cfg"])
-    model = models.MAE_ViT.from_config(model_cfg)
-    model.load_state_dict(checkpt_dict["model"])
-    for param in model.encoder.parameters():
+    chkpt = torch.load(chkpt_pth, weights_only=False)
+    if "pretraining" in chkpt_pth:
+        optim_cfg = cfg.OPTIM_CFGS["finetuning"]
+        train_cfg = cfg.TRAIN_CONFIGS["finetuning"]
+        model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
+        model_cfg.constructor_kwargs["mask_ratio"] = 0
+        model = models.mk_model_from_cfg(model_cfg)
+        model.load_state_dict(chkpt["model"])
+        optimizer = training.mk_optimizer(model, optim_cfg)
+    elif "finetuning" in chkpt_pth:
+        optim_cfg = cfg.OPTIM_CFGS["finetuning"]
+        train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
+        model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
+        model_cfg.constructor_kwargs["mask_ratio"] = 0
+        model = models.mk_model_from_cfg(model_cfg)
+        model.load_state_dict(chkpt["model"])
+        optimizer = training.mk_optimizer(model, optim_cfg)
+        optimizer.load_state_dict(chkpt["optimizer"])
+    else:
+        print("Error: Don't know if this is a pretraining checkpoint or finetuning checkpoint please put it in appropriate folder")
+        exit(1)
+    for param in model.model.encoder.parameters():
         param.requires_grad_(False)
-    # model.decoder = models.MAE_DecoderBF(256, 16, 256, 8, num_head=8, out_channels=56).to(cfg.DEVICE)
-    # for param in model.decoder.head.parameters():
-    #     param.requires_grad_(True)
-    criterion = metrics.SegmentationLoss(train_cfg)
-    # criterion = ClassWeightedMSE(1e-4)
-    optimizer = training.mk_optimizer(model, train_cfg)
     lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
+    criterion = metrics.SegmentationLoss(train_cfg)
+    data_loaders = dataset.mk_segmentation_data_loaders(train_cfg)
+    wandb_run = training.wandb_init(
+        model_cfg,
+        train_cfg,
+        optim_cfg,
+        tags=cfg.WANDB_RUN_TAGS["finetuning"],
+        group="manual_training",
+    )
+    print(wandb_run.name)
     trainer = training.Trainer(
         model,
         train_cfg,
         optimizer,
         lr_scheduler,
-        cfg.WandbConfig(["finetuning", "MAE"], "finetuning")
+        wandb_run,
     )
+    if "finetuning" in chkpt_pth:
+        trainer.epoch = chkpt["epoch"]
+        trainer.ste = chkpt["ste"]
+        trainer.training_samples_seen = chkpt["training_samples_seen"]
+    models.print_params_count(model)
     trainer.train_model(
         data_loaders,
         criterion,
-        "checkpoints/finetuned/vit_epoch_{epoch}.pt"
+        "checkpoints/finetuning/down_scaled_vit/{wandb_run_name}/pretrained_vit_epoch_{epoch}.pt",
     )
 
 

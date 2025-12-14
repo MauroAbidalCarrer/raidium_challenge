@@ -1,6 +1,6 @@
 import os
-from tqdm import tqdm
 import warnings
+from itertools import product
 from typing import Any, Optional
 from collections import defaultdict
 
@@ -46,7 +46,10 @@ class Trainer:
         dataset.mk_dataset(verbose=False)
         torch.backends.cuda.matmul.fp32_precision = 'ieee'
         utils.setup_seed(train_cfg.random_state)
-        self.confuse_mat_metric = monai_metrics.ConfusionMatrixMetric(reduction="mean_channel")
+        self.confuse_mat_metric = monai_metrics.ConfusionMatrixMetric(
+            metric_name=cfg.CONFUSE_MAT_METRICS_NAMES,
+            reduction="mean_batch",
+        )
 
     def train_model(
             self,
@@ -125,11 +128,9 @@ class Trainer:
         epoch_dict["training_samples_seen"] = self.training_samples_seen
         epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         self.epoch += 1
-        confues_mat_metric_agg = self.confuse_mat_metric.aggregate()
+        confuse_mat_metric_agg = self.confuse_mat_metric.aggregate()
         self.confuse_mat_metric.reset()
-        print("confues_mat_metric_agg:")
-        print(confues_mat_metric_agg)
-        epoch_dict["confues_mat_metric"] = confues_mat_metric_agg
+        epoch_dict["confuse_mat_metric"] = confuse_mat_metric_agg
         return epoch_dict
 
     def perform_training_step(
@@ -162,9 +163,9 @@ class Trainer:
         return {**loss_dict, "loss_norm": loss_norm}
 
     def confuse_mat_metric_step(self, batch: dict[str, Tensor], model_output: dict[str, Tensor]):
-        if "y_pred" in model_output:
+        if "y_pred" in model_output and "y_true" in batch:
             self.confuse_mat_metric(
-                torch.nn.functional.one_hot(model_output["y_pred"].argmax(), cfg.N_CLASSES).permute(0, 3, 1, 2),
+                torch.nn.functional.one_hot(model_output["y_pred"].argmax(dim=1), cfg.N_CLASSES).permute(0, 3, 1, 2),
                 torch.nn.functional.one_hot(batch["y_true"], cfg.N_CLASSES).permute(0, 3, 1, 2),
             )
 
@@ -214,11 +215,8 @@ class Trainer:
             self.confuse_mat_metric_step(batch_dict, model_output_dict)
         eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
         eval_dict["training_samples_seen"] = self.training_samples_seen
-        confues_mat_metric_agg = self.confuse_mat_metric.aggregate()
+        eval_dict["confuse_mat_metric"] = self.confuse_mat_metric.aggregate()
         self.confuse_mat_metric.reset()
-        print("confues_mat_metric_agg:")
-        print(confues_mat_metric_agg)
-        eval_dict["confues_mat_metric"] = confues_mat_metric_agg
         with timing.time_to_run("evaluation/dice_score"):
             seg_preds = np.concat(seg_preds).reshape(-1 , 256 * 256)
             seg_y_true = np.concat(seg_y_true).reshape(-1, 256 * 256)
@@ -226,6 +224,13 @@ class Trainer:
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
+        if "confuse_mat_metric" in data:
+            confuse_mat_metric: list[Tensor] = data["confuse_mat_metric"]
+            del data["confuse_mat_metric"]
+            for metric_idx, metric_name in enumerate(cfg.CONFUSE_MAT_METRICS_NAMES):
+                confuse_mat_metric[metric_idx] = confuse_mat_metric[metric_idx].tolist()
+                for cls_idx in range(cfg.N_CLASSES):
+                    data[f"{metric_name}/{cls_idx}"] = confuse_mat_metric[metric_idx][cls_idx]
         data_with_prefix = {prefix + "/" + k: v for k, v in data.items()}
         trainer_data = {
             "training/epoch": self.epoch,

@@ -18,6 +18,7 @@ PIXEL_VALUE_CHANNEL_IDX = N_CLASSES
 N_MODEL_OUT_CHANNELS = N_CLASSES + 1
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 criterion_t = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
+CONFUSE_MAT_METRICS_NAMES = ["recall", "precision", "f1 score"]
 
 
 @dataclass

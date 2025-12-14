@@ -92,14 +92,15 @@ class SegmentationLoss:
         ### Returns:
         Dictionnary of loss_average, ce_loss and dice_loss
         """
-        
         y_true = forward_dict["y_true"].long()
         y_pred = forward_dict["y_pred"]
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
-        if self.train_cfg.use_cls_weights_for_dice:
-            dice_loss = torch_dice_loss(y_pred, y_true, self.class_weights)
-        else:
-            dice_loss = torch_dice_loss(y_pred, y_true)
+        dice_loss = torch_dice_loss(
+            y_pred,
+            y_true,
+            class_weights=self.class_weights if self.train_cfg.use_cls_weights_for_dice else None,
+            inclue_background=self.train_cfg.include_backgroud,
+        )
         loss = dice_loss * self.train_cfg.dice_loss_weight \
             + ce_loss * self.train_cfg.cross_entropy_loss_weight
         return {
@@ -108,17 +109,26 @@ class SegmentationLoss:
             "dice_loss": dice_loss,
         }
 
-def torch_dice_loss(pred: Tensor, target: Tensor, class_weights: Optional[Tensor]=None, smooth: float=1e-7) -> Tensor:
-    pred = torch.softmax(pred, dim=1)
-    target_one_hot = (
+def torch_dice_loss(
+        y_pred: Tensor,
+        y_true: Tensor,
+        class_weights: Optional[Tensor]=None,
+        inclue_background: Optional[bool] = None,
+        smooth: float=1e-7,
+    ) -> Tensor:
+    y_pred = torch.softmax(y_pred, dim=1)
+    y_true_one_hot = (
         torch.nn.functional.one_hot(
-            target,
-            num_classes=pred.shape[1],
+            y_true,
+            num_classes=y_pred.shape[1],
         )
         .permute(0, 3, 1, 2)
     )
-    intersection = (pred * target_one_hot).sum(dim=(2, 3))
-    union = pred.sum(dim=(2, 3)) + target_one_hot.sum(dim=(2, 3))
+    if inclue_background is not None and not inclue_background:
+        y_pred = y_pred[:, 1:]
+        y_true_one_hot = y_true_one_hot[:, 1:]
+    intersection = (y_pred * y_true_one_hot).sum(dim=(2, 3))
+    union = y_pred.sum(dim=(2, 3)) + y_true_one_hot.sum(dim=(2, 3))
     dice = (2. * intersection + smooth) / (union + smooth)
     if class_weights is not None:
         dice = dice * class_weights.unsqueeze(0)

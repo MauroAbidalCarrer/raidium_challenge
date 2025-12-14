@@ -1,8 +1,8 @@
 import os
 import shutil
 import zipfile
-from typing import Any
 from pathlib import Path
+from typing import Any, Optional
 
 import torch
 import requests
@@ -10,6 +10,7 @@ import torchvision
 import numpy as np
 import pandas as pd
 from torch import Tensor
+from rich.progress import track
 from torchvision import tv_tensors
 from torch.utils.data import (
     DataLoader,
@@ -34,23 +35,29 @@ def mk_segmentation_data_loaders(
         test_size=train_cfg.test_size,
         random_state=train_cfg.random_state,
     )
-    if not hasattr(train_cfg, "use_cls_balanced_sampler"):
-        print("WARNING: no 'use_cls_balanced_sampler' param in train config defaulting to False.")
-    if getattr(train_cfg, "use_cls_balanced_sampler", False):
-        print("Using weighted random sampler.")
-        samples_weights = mk_samples_weights(y_train)
-        train_sampler = WeightedRandomSampler(
-            samples_weights,
-            num_samples=len(samples_weights),
-            replacement=True,
-        )
-        train_shuffle = False
+    if hasattr(train_cfg, "sampling"):
+        print("sampling method:", train_cfg.sampling)
+        if train_cfg.sampling == "uniform":
+            train_dl_kwargs = {"batch_sampler": UniformBatchSampler(y_train, train_cfg)}
+        elif train_cfg.sampling == "weighted":
+            samples_weights = mk_samples_weights(y_train)
+            train_sampler = WeightedRandomSampler(
+                samples_weights,
+                num_samples=len(samples_weights),
+                replacement=True,
+            )
+            train_dl_kwargs = {"sampler": train_sampler}
+        elif train_cfg.sampling == "shuffle":
+            train_dl_kwargs = {"shuffle": True}
+        else:
+            raise ValueError(f"Unrecognized training config sampling: {train_cfg.sampling}")
     else:
-        train_shuffle = True
-        train_sampler = None
+        print("WARNING: No sampling attribute found in train config, using base data loader with shuffle=True.")
+        train_dl_kwargs = {"shuffle": True}
+    print("train_dl_kwargs:", train_dl_kwargs)
     y_test_fill = torch.zeros(len(x_test), 256, 256, device=cfg.DEVICE)
     return {
-        "train": mk_dl_from_tensors(x_train, y_train, batch_size=train_cfg.batch_size, shuffle=train_shuffle, sampler=train_sampler),
+        "train": mk_dl_from_tensors(x_train, y_train, **train_dl_kwargs),
         "valid": mk_dl_from_tensors(x_valid, y_valid, batch_size=train_cfg.batch_size),
         "test":  mk_dl_from_tensors(x_test, y_test_fill, batch_size=train_cfg.batch_size),
     }
@@ -61,16 +68,90 @@ def mk_dl_from_tensors(*tensors: list[Tensor], **data_loader_kwargs) -> DataLoad
 
 def mk_samples_weights(y_train_with_labels: Tensor) -> Tensor:
     """Takes in x and y with removed samples without labels and returns per sample weights."""
-    def cls_presence_mask(y_train: Tensor) -> Tensor:
-        cls_presence = torch.empty(y_train.shape[0], cfg.N_CLASSES)
-        for class_idx in range(0, cfg.N_CLASSES):
-            cls_presence[:, class_idx] = (y_train == class_idx).any(dim=(1, 2))
-        return cls_presence
     y_classes = cls_presence_mask(y_train_with_labels)
     class_counts = y_classes.sum(dim=0, keepdim=True)
     cls_weight = 1 / (class_counts + 1e-8)
     sample_weights = (y_classes * cls_weight).sum(dim=1)
     return sample_weights
+
+class UniformBatchSampler(Sampler):
+    def __init__(self, y_train: Tensor, train_cfg: cfg.TrainingConfig):
+        assert cfg.N_CLASSES <= train_cfg.batch_size, "Batch size should be less or equal to n classes when using unfiorm sampler."
+        super().__init__()
+        self.train_cfg = train_cfg
+        self.n_samples = y_train.shape[0]
+        quotient = self.n_samples // self.train_cfg.batch_size
+        remainder = self.n_samples % self.train_cfg.batch_size
+        self.n_batches = quotient + min(1, remainder)
+        self.init_samples_per_cls_idx(y_train)
+        self.batch_idx_buff = torch.empty(
+            self.train_cfg.batch_size,
+            dtype=torch.long,
+            device=cfg.DEVICE,
+        )
+        self.arange_buff = torch.arange(
+            cfg.N_CLASSES,
+            dtype=torch.long,
+            device=cfg.DEVICE,
+        )
+
+    def init_samples_per_cls_idx(self, y_train: Tensor) -> Tensor:
+        cls_mask = cls_presence_mask(y_train)
+        samples_idx_per_classes_lst: list[Tensor] = [torch.nonzero(cls_present).squeeze() for cls_present in cls_mask.T]
+        self.max_n_samples_in_cls = max(map(len, samples_idx_per_classes_lst))
+        self.samples_per_classes_t = torch.empty(
+            self.max_n_samples_in_cls, cfg.N_CLASSES,
+            dtype=torch.long,
+            device=cfg.DEVICE,
+        )
+        for cls_idx, cls_samples_idx in enumerate(samples_idx_per_classes_lst):
+            quotient  = self.max_n_samples_in_cls // len(cls_samples_idx)
+            remainder = self.max_n_samples_in_cls % len(cls_samples_idx)
+            n_repeats = quotient + min(1, remainder)
+            repeated_samples = cls_samples_idx.repeat(n_repeats)
+            self.samples_per_classes_t[:, cls_idx] = repeated_samples[:self.max_n_samples_in_cls]
+
+    def __iter__(self):
+        for _ in range(self.n_batches):
+            uniform_rand_samp_idx = torch.randint(
+                low=0,
+                high=self.max_n_samples_in_cls,
+                size=(cfg.N_CLASSES, ),
+                dtype=torch.long,
+                device=cfg.DEVICE,
+            )
+            # Should use torch.gather 
+            uniform_rand_samp_idx = self.samples_per_classes_t[uniform_rand_samp_idx, self.arange_buff]
+            self.batch_idx_buff[:cfg.N_CLASSES] = uniform_rand_samp_idx
+            # fill the rest with random classes
+            n_remaining_samples = self.train_cfg.batch_size - cfg.N_CLASSES
+            uniform_rand_samp_idx = torch.randint(
+                low=0,
+                high=self.max_n_samples_in_cls,
+                size=(n_remaining_samples, ),
+                dtype=torch.long,
+                device=cfg.DEVICE,
+            )
+            uniform_rand_cls_idx = torch.randint(
+                low=0,
+                high=cfg.N_CLASSES,
+                size=(n_remaining_samples, ),
+                dtype=torch.long,
+                device=cfg.DEVICE,
+            )
+            remaining_unifor_samp_idx = self.samples_per_classes_t[uniform_rand_samp_idx, uniform_rand_cls_idx]
+            self.batch_idx_buff[cfg.N_CLASSES:] = remaining_unifor_samp_idx
+            permute_idx = torch.randperm(len(self.batch_idx_buff))
+            yield self.batch_idx_buff[permute_idx]
+
+    def __len__(self) -> int:
+        return self.n_batches
+
+def cls_presence_mask(y_train: Tensor) -> Tensor:
+    cls_presence = torch.empty(y_train.shape[0], cfg.N_CLASSES)
+    for class_idx in range(0, cfg.N_CLASSES):
+        cls_presence[:, class_idx] = (y_train == class_idx).any(dim=(1, 2))
+    return cls_presence
 
 def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, DataLoader]:
     x_train, y_train, x_test = load_raw_dataset(DEVICE)
@@ -103,49 +184,13 @@ def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, Data
 def preprocess_batch(batch_dict: dict[str, Any]) -> dict[str, Any]:
     x = batch_dict["x"]
     x = x.to(device=DEVICE, dtype=torch.float)
-    batch_dict["x"] = (x - MEAN) / STD
+    batch_dict["x"] = (x - cfg.X_MEAN) / cfg.X_STD
     if "y_true" in batch_dict:
         batch_dict["y_true"] = (
             tv_tensors.Mask(batch_dict["y_true"])
             .to(device=cfg.DEVICE, dtype=torch.long)
         )
     return batch_dict
-
-def load_preprocessed_dataset() -> tuple[Tensor, Tensor, Tensor]:
-    """
-    - Loads formatted dataset
-    - Standardizes the x train and test by their combined mean/std
-      Since we have access to the x test we can "leak" its stats into the training.
-    - Removes the train samples without labels
-
-    Returns:
-        tuple[Tensor, Tensor, Tensor]: x_train, y_train, x_test
-    """
-    y_train, x_train, x_test = load_raw_dataset()
-    x_train_n_test = torch.cat((x_train, x_test))
-    mean, std = x_train_n_test.mean(), x_train_n_test.std()
-    x_train = (x_train - mean) / (std + 1e-8)
-    x_test = (x_test - mean) / (std + 1e-8)
-    x_train, y_train = remove_samples_without_labels(x_train, y_train)
-
-    return x_train, y_train, x_test
-
-MEAN: float = 14.0816
-STD: float = 35.2164
-
-def preprocess_imgs(x: Tensor) -> Tensor:
-    """
-    Processes an image to feed it to a model.
-
-    :param x: raw image(s)
-    :type x: Tensor
-    :return: normalized image(s) in float32 on device.
-    :rtype: Tensor
-    """
-    return (x.to(device=DEVICE, dtype=torch.float) - MEAN) / STD
-
-def preprocess_y_true(y_true: Tensor) -> tv_tensors.Mask:
-    return tv_tensors.Mask(y_true).to(device=cfg.DEVICE, dtype=torch.long)
 
 def load_raw_dataset(device: torch.device) -> tuple[Tensor, Tensor, Tensor]:
     y_train: Tensor = torch.load("dataset/formatted/y-train.pt").to(device=device, dtype=torch.uint8)

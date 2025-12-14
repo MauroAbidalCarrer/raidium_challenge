@@ -1,13 +1,15 @@
 import os
-from tqdm import tqdm
 import warnings
+from itertools import product
 from typing import Any, Optional
 from collections import defaultdict
 
 import torch
 import wandb
 import numpy as np
+import pandas as pd
 from torch import nn, Tensor
+from monai import metrics as monai_metrics
 from rich.progress import track
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
@@ -45,6 +47,10 @@ class Trainer:
         dataset.mk_dataset(verbose=False)
         torch.backends.cuda.matmul.fp32_precision = 'ieee'
         utils.setup_seed(train_cfg.random_state)
+        self.confuse_mat_metric = monai_metrics.ConfusionMatrixMetric(
+            metric_name=cfg.CONFUSE_MAT_METRICS_NAMES,
+            reduction="mean_batch",
+        )
 
     def train_model(
             self,
@@ -57,7 +63,6 @@ class Trainer:
             message="RandomErasing.*tv_tensors.Mask",
             category=UserWarning,
         )
-
         epoch_it = track(
             range(self.epoch, self.cfg.n_epochs),
             description="Training model",
@@ -70,8 +75,6 @@ class Trainer:
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
-            # if self.epoch % 50 == 0 or is_last_epoch:
-            #     timing.print_time_dict()
             if (self.epoch % 50 == 0 and self.epoch != 0) or is_last_epoch:
                 self.save_checkpoint(chkpt_pth_format)
 
@@ -125,8 +128,10 @@ class Trainer:
         epoch_dict = {k: v.mean().item() for k, v in epochs_steps_dicts.items()}
         epoch_dict["training_samples_seen"] = self.training_samples_seen
         epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
-        # TODO: Check if this shouldn't get called per step instead of per epoch.
         self.epoch += 1
+        confuse_mat_metric_agg = self.confuse_mat_metric.aggregate()
+        self.confuse_mat_metric.reset()
+        epoch_dict["confuse_mat_metric"] = confuse_mat_metric_agg
         return epoch_dict
 
     def perform_training_step(
@@ -151,11 +156,19 @@ class Trainer:
             self.model.parameters(),
             1.0, # TODO: Hypertune this
         )
+        self.confuse_mat_metric_step(batch_dict, model_output_dict)
         self.optimizer.step()
         self.training_samples_seen += len(batch_dict["x"])
         self.lr_scheduler.step()
         self.step += 1
         return {**loss_dict, "loss_norm": loss_norm}
+
+    def confuse_mat_metric_step(self, batch: dict[str, Tensor], model_output: dict[str, Tensor]):
+        if "y_pred" in model_output and "y_true" in batch:
+            self.confuse_mat_metric(
+                torch.nn.functional.one_hot(model_output["y_pred"].argmax(dim=1), cfg.N_CLASSES).permute(0, 3, 1, 2),
+                torch.nn.functional.one_hot(batch["y_true"], cfg.N_CLASSES).permute(0, 3, 1, 2),
+            )
 
     @torch.no_grad
     def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: cfg.criterion_t):
@@ -166,11 +179,12 @@ class Trainer:
         """
         self.model = self.model.eval()
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
-        test_infer_dict  = self.evaluate_model_on_single_split(data_loaders["test"],  criterion)
-        valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
+        # valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
+        # with torch.inference_mode():
+        #     test_infer_dict  = self.evaluate_model_on_single_split(data_loaders["test"],  criterion)
         self.wandb_log_dict_with_prefix(valid_eval_dict, "validation")
-        self.wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test")
-        self.wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid")
+        # self.wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test")
+        # self.wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid")
 
     @torch.no_grad
     def evaluate_model_on_single_split(
@@ -199,9 +213,11 @@ class Trainer:
             pred = torch.argmax(model_output_dict["y_pred"], dim=1)
             seg_y_true.append(batch_dict["y_true"].squeeze().cpu().numpy())
             seg_preds.append(pred.squeeze().cpu().numpy())
-        with timing.time_to_run("evaluation/mk_eval_dict"):
-            eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
-            eval_dict["training_samples_seen"] = self.training_samples_seen
+            self.confuse_mat_metric_step(batch_dict, model_output_dict)
+        eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
+        eval_dict["training_samples_seen"] = self.training_samples_seen
+        eval_dict["confuse_mat_metric"] = self.confuse_mat_metric.aggregate()
+        self.confuse_mat_metric.reset()
         with timing.time_to_run("evaluation/dice_score"):
             seg_preds = np.concat(seg_preds).reshape(-1 , 256 * 256)
             seg_y_true = np.concat(seg_y_true).reshape(-1, 256 * 256)
@@ -209,6 +225,27 @@ class Trainer:
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
+        if "confuse_mat_metric" in data:
+            confuse_mat_metrics: list[Tensor] = data["confuse_mat_metric"]
+            del data["confuse_mat_metric"]
+        #     confuse_mat_metrics = (
+        #         torch.stack(confuse_mat_metrics)
+        #         .cpu()
+        #         .numpy()
+        #         .tolist()
+        #     )
+        #     cls_indices = list(range(cfg.N_CLASSES))
+        #     for metric_name, metric_values in zip(cfg.CONFUSE_MAT_METRICS_NAMES, confuse_mat_metrics):
+        #         confuse_mat_metric_table = wandb.Table(
+        #             data=list(zip(cls_indices, metric_values)),
+        #             columns=["cls_idx", f"{metric_name}_value"],
+        #         )
+        #         data[metric_name] = wandb.plot.bar(
+        #             confuse_mat_metric_table,
+        #             value="cls_idx",
+        #             label=f"{metric_name}_value",
+        #             title=metric_name,
+        #         )
         data_with_prefix = {prefix + "/" + k: v for k, v in data.items()}
         trainer_data = {
             "training/epoch": self.epoch,

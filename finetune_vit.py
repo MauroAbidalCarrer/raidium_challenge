@@ -22,6 +22,7 @@ def main():
         model = models.mk_model_from_cfg(model_cfg)
         model.load_state_dict(chkpt["model"])
         optimizer = training.mk_optimizer(model, optim_cfg)
+        train_cfg.pretrained_checkpoint_pth = chkpt_pth
     elif "finetuning" in chkpt_pth:
         optim_cfg = cfg.OPTIM_CFGS["finetuning"]
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
@@ -62,7 +63,7 @@ def main():
     trainer.train_model(
         data_loaders,
         criterion,
-        "checkpoints/finetuning/down_scaled_vit/{wandb_run_name}/pretrained_vit_epoch_{epoch}.pt",
+        "checkpoints/finetuning/down_scaled_vit/{wandb_run_name}/finetuned_vit_epoch_{epoch}.pt",
     )
 
 

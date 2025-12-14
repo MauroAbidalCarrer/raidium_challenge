@@ -76,32 +76,73 @@ def mk_samples_weights(y_train_with_labels: Tensor) -> Tensor:
 
 class UniformBatchSampler(Sampler):
     def __init__(self, y_train: Tensor, train_cfg: cfg.TrainingConfig):
+        assert cfg.N_CLASSES <= train_cfg.batch_size, "Batch size should be less or equal to n classes when using unfiorm sampler."
         super().__init__()
         self.train_cfg = train_cfg
         self.n_samples = y_train.shape[0]
         quotient = self.n_samples // self.train_cfg.batch_size
         remainder = self.n_samples % self.train_cfg.batch_size
-        self.n_batches = quotient + max(1, remainder)
-        self.batch_samples_idx_ltb = self.mk_batch_idx_ltb(y_train)
-
-    def mk_batch_idx_ltb(self, y_train: Tensor) -> Tensor:
-        batch_idx_ltb = torch.empty(
-            self.n_batches, self.train_cfg.batch_size,
+        self.n_batches = quotient + min(1, remainder)
+        self.init_samples_per_cls_idx(y_train)
+        self.batch_idx_buff = torch.empty(
+            self.train_cfg.batch_size,
             dtype=torch.long,
             device=cfg.DEVICE,
         )
+        self.arange_buff = torch.arange(
+            cfg.N_CLASSES,
+            dtype=torch.long,
+            device=cfg.DEVICE,
+        )
+
+    def init_samples_per_cls_idx(self, y_train: Tensor) -> Tensor:
         cls_mask = cls_presence_mask(y_train)
-        classes_indices: list[Tensor] = [torch.nonzero(cls_present).squeeze() for cls_present in cls_mask.T]
-        for batch_idx in track(range(self.n_batches), "making batch idx ltb", transient=True):
-            for sample_idx in range(self.train_cfg.batch_size):
-                cls_indices = classes_indices[sample_idx % len(classes_indices)]
-                batch_idx_ltb[batch_idx, sample_idx] = cls_indices[batch_idx % len(cls_indices)]
-        return batch_idx_ltb
+        samples_idx_per_classes_lst: list[Tensor] = [torch.nonzero(cls_present).squeeze() for cls_present in cls_mask.T]
+        self.max_n_samples_in_cls = max(map(len, samples_idx_per_classes_lst))
+        self.samples_per_classes_t = torch.empty(
+            self.max_n_samples_in_cls, cfg.N_CLASSES,
+            dtype=torch.long,
+            device=cfg.DEVICE,
+        )
+        for cls_idx, cls_samples_idx in enumerate(samples_idx_per_classes_lst):
+            quotient  = self.max_n_samples_in_cls // len(cls_samples_idx)
+            remainder = self.max_n_samples_in_cls % len(cls_samples_idx)
+            n_repeats = quotient + min(1, remainder)
+            repeated_samples = cls_samples_idx.repeat(n_repeats)
+            self.samples_per_classes_t[:, cls_idx] = repeated_samples[:self.max_n_samples_in_cls]
 
     def __iter__(self):
-        for batch_idx in range(self.n_batches):
-            # print(self.batch_samples_idx_ltb[batch_idx])
-            yield self.batch_samples_idx_ltb[batch_idx]
+        for _ in range(self.n_batches):
+            uniform_rand_samp_idx = torch.randint(
+                low=0,
+                high=self.max_n_samples_in_cls,
+                size=(cfg.N_CLASSES, ),
+                dtype=torch.long,
+                device=cfg.DEVICE,
+            )
+            # Should use torch.gather 
+            uniform_rand_samp_idx = self.samples_per_classes_t[uniform_rand_samp_idx, self.arange_buff]
+            self.batch_idx_buff[:cfg.N_CLASSES] = uniform_rand_samp_idx
+            # fill the rest with random classes
+            n_remaining_samples = self.train_cfg.batch_size - cfg.N_CLASSES
+            uniform_rand_samp_idx = torch.randint(
+                low=0,
+                high=self.max_n_samples_in_cls,
+                size=(n_remaining_samples, ),
+                dtype=torch.long,
+                device=cfg.DEVICE,
+            )
+            uniform_rand_cls_idx = torch.randint(
+                low=0,
+                high=cfg.N_CLASSES,
+                size=(n_remaining_samples, ),
+                dtype=torch.long,
+                device=cfg.DEVICE,
+            )
+            remaining_unifor_samp_idx = self.samples_per_classes_t[uniform_rand_samp_idx, uniform_rand_cls_idx]
+            self.batch_idx_buff[cfg.N_CLASSES:] = remaining_unifor_samp_idx
+            permute_idx = torch.randperm(len(self.batch_idx_buff))
+            yield self.batch_idx_buff[permute_idx]
 
     def __len__(self) -> int:
         return self.n_batches

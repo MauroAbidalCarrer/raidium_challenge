@@ -94,6 +94,12 @@ class SegmentationLoss:
                 softmax=True,
                 to_onehot_y=True,
             )
+        elif train_cfg.dice_loss == "monai":
+            self.dice_loss = monai.losses.DiceLoss(
+                train_cfg.include_backgroud,
+                softmax=True,
+                to_onehot_y=True,
+            )
         elif train_cfg.dice_loss == "custom":
             self.dice_loss = partial(
                 torch_dice_loss,

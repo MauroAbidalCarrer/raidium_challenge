@@ -82,7 +82,7 @@ TRAIN_CONFIGS = {
         sampling = "uniform",
         use_cls_weights_for_dice = False,
         include_backgroud = True,
-        dice_loss="generalized_monai",
+        dice_loss="monai",
         max_loss_norm = 2,
         transform=v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),

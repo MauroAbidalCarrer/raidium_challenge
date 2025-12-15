@@ -46,9 +46,9 @@ def mk_segmentation_data_loaders(
                 num_samples=len(samples_weights),
                 replacement=True,
             )
-            train_dl_kwargs = {"sampler": train_sampler}
+            train_dl_kwargs = {"sampler": train_sampler, "batch_size": train_cfg.batch_size}
         elif train_cfg.sampling == "shuffle":
-            train_dl_kwargs = {"shuffle": True}
+            train_dl_kwargs = {"shuffle": True, "batch_size": train_cfg.batch_size}
         else:
             raise ValueError(f"Unrecognized training config sampling: {train_cfg.sampling}")
     else:

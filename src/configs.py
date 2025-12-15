@@ -104,8 +104,8 @@ TRAIN_CONFIGS = {
         dice_loss_weight = 2,
         cross_entropy_loss_weight= 1,
         mask_ratio = 0,
-        sampling = "uniform",
-        dice_loss = "generalized_monai",
+        sampling = "weighted",
+        dice_loss = "custom",
         transform = v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),

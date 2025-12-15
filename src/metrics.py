@@ -118,7 +118,10 @@ class SegmentationLoss:
         y_true = forward_dict["y_true"].long()
         y_pred = forward_dict["y_pred"]
         ce_loss = self.cross_entropy_loss(y_pred, y_true)
-        dice_loss = self.dice_loss(y_pred, y_true.unsqueeze(1))
+        if "monai" in self.train_cfg.dice_loss:
+            dice_loss = self.dice_loss(y_pred, y_true.unsqueeze(1))
+        else:
+            dice_loss = self.dice_loss(y_pred, y_true)
         loss = dice_loss * self.train_cfg.dice_loss_weight \
             + ce_loss * self.train_cfg.cross_entropy_loss_weight
         return {
@@ -129,7 +132,7 @@ class SegmentationLoss:
 
 def torch_dice_loss(
         y_pred: Tensor,
-        y_true: Tensor,
+        y_true_one_hot: Tensor,
         class_weights: Optional[Tensor]=None,
         inclue_background: Optional[bool] = None,
         smooth: float=1e-7,
@@ -137,7 +140,7 @@ def torch_dice_loss(
     y_pred = torch.softmax(y_pred, dim=1)
     y_true_one_hot = (
         torch.nn.functional.one_hot(
-            y_true,
+            y_true_one_hot,
             num_classes=y_pred.shape[1],
         )
         .permute(0, 3, 1, 2)

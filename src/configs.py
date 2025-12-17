@@ -44,7 +44,7 @@ class TrainingConfig:
     n_warmup_epochs: int = 50
     transform: v2.Transform = v2.Identity()
     use_cls_weights_for_dice: bool = False
-    sampling: Optional[Literal["weighted", "uniform", "shuffle"]] = None
+    sampling: Literal["weighted", "uniform", "shuffle"] = "shuffle"
     include_backgroud: Optional[bool] = True
     dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
     max_loss_norm: float = 1
@@ -100,8 +100,8 @@ TRAIN_CONFIGS = {
         ]),
     ),
     "unet_training": TrainingConfig(
-        batch_size=64,
-        n_epochs=4000,
+        batch_size=32,
+        n_epochs=600,
         dice_loss_weight = 2,
         cross_entropy_loss_weight= 1,
         mask_ratio = 0,

@@ -48,6 +48,7 @@ class TrainingConfig:
     include_backgroud: Optional[bool] = True
     dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
     max_loss_norm: float = 1
+    checkpointing_interval: int  = 5
 
 TRAIN_CONFIGS = {
     "pretraining": TrainingConfig(
@@ -106,6 +107,7 @@ TRAIN_CONFIGS = {
         mask_ratio = 0,
         sampling = "weighted",
         dice_loss = "custom",
+        checkpointing_interval = 5,
         transform = v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),

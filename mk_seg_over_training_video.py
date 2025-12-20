@@ -1,4 +1,5 @@
 import os
+from sys import argv
 from tqdm import tqdm
 from IPython.display import HTML
 
@@ -15,30 +16,49 @@ from matplotlib.animation import FuncAnimation
 from src import configs as cfg
 from src import dataset, models
 
-CHKPT_DIRECTORY = "checkpoints/unet/devout-fog-532/"
+
 N_SAMPLES_TO_SHOW = 10
 N_CHKPT_TO_PLT = -1
+NO_ARGS_MSG = """
+Error: Please provide either path to:
+- a model checkpoints directory.
+- a cached segmentaiton .npy file.
+"""
 
 
 def main():
+    dataset.mk_dataset()
     train_cfg = cfg.TrainingConfig(batch_size=50)
     loaders = dataset.mk_segmentation_data_loaders(train_cfg)
     x, y_true = next(iter(loaders["train"]))
     batch = dataset.preprocess_batch({"x": x, "y_true": y_true})
+    if len(argv) < 2:
+        print(NO_ARGS_MSG)
+        exit(1)
+    elif argv[1].endswith((".pt", ".pth")):
+        segs = mk_segs_over_training_array(batch, argv[1])
+    elif argv[1].endswith(".npy"):
+        print("Making animaiton from cached segmentation npy file.")
+        segs: np.ndarray = np.load(argv[1])
+    mk_anim_from_segs(batch, segs)
+
+def mk_segs_over_training_array(batch: dict[str, Tensor], chkpt_pth: str) -> np.ndarray:
     segs = (
-        mk_segs_preds_over_epochs(batch, CHKPT_DIRECTORY)
+        mk_segs_preds_over_epochs(batch, chkpt_pth)
         .detach()
         .cpu()
         .numpy()
     )
     np.save("segs.npy", segs, allow_pickle=False)
+    return segs
+
+def mk_anim_from_segs(batch: dict[str, Tensor], segs: np.ndarray) -> FuncAnimation:
     anim = mk_anim(batch, segs)
     anim.save(
         "segmentation_animation.mp4",
         fps=30,
         dpi=150,
     )
-
 
 def mk_segs_preds_over_epochs(batch: dict[str, Tensor], chkpt_directory: str) -> Tensor:
     chkpt_filenames = os.listdir(chkpt_directory)[:N_CHKPT_TO_PLT]

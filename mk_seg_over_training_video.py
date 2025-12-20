@@ -31,6 +31,7 @@ def main():
     train_cfg = cfg.TrainingConfig(batch_size=50)
     loaders = dataset.mk_segmentation_data_loaders(train_cfg)
     x, y_true = next(iter(loaders["train"]))
+    del loaders
     batch = dataset.preprocess_batch({"x": x, "y_true": y_true})
     if len(argv) < 2:
         print(NO_ARGS_MSG)
@@ -51,14 +52,6 @@ def mk_segs_over_training_array(batch: dict[str, Tensor], chkpt_pth: str) -> np.
     )
     np.save("segs.npy", segs, allow_pickle=False)
     return segs
-
-def mk_anim_from_segs(batch: dict[str, Tensor], segs: np.ndarray) -> FuncAnimation:
-    anim = mk_anim(batch, segs)
-    anim.save(
-        "segmentation_animation.mp4",
-        fps=30,
-        dpi=150,
-    )
 
 def mk_segs_preds_over_epochs(batch: dict[str, Tensor], chkpt_directory: str) -> Tensor:
     chkpt_filenames = os.listdir(chkpt_directory)[:N_CHKPT_TO_PLT]
@@ -87,25 +80,49 @@ def load_chkpt(chkpt_pth: str) -> torch.nn.Module:
     model = model.eval()
     return model
 
-def mk_anim(batch: dict[str, Tensor], segs: np.ndarray) -> FuncAnimation:
+def mk_anim_from_segs(batch: dict[str, Tensor], segs: np.ndarray) -> FuncAnimation:
+    anim = mk_anim(batch, segs)
+    anim.save(
+        "segmentation_animation.mp4",
+        fps=30,
+        dpi=150,
+    )
+
+def mk_anim(
+        batch: dict[str, Tensor],
+        segs: np.ndarray,
+        n_samples_to_plt: int = 6,
+    ) -> FuncAnimation:
+    x_np = (
+        batch["x"]
+        .cpu()
+        .numpy()
+        [:, :n_samples_to_plt]
+    )  # [B, H, W, C] or [B, H, W]
+    segs = segs[:, :n_samples_to_plt]
+    print('batch["x"].dtype:', x_np.dtype)
+    print("segs.shape:", segs.shape)
+
+
     # For segmentation labels (categorical)
     seg_norm = Normalize(
         vmin=0,
         vmax=cfg.N_CLASSES - 1,   # important: categorical, fixed range
     )
 
-    colored_seg_buffer = plt.cm.rainbow(seg_norm(segs))  # -> [B, H, W, 4]
+    colored_seg_buffer = plt.cm.rainbow(seg_norm(segs), bytes=True)  # -> [B, H, W, 4]
+    print("colored_seg_buffer.dtype:", colored_seg_buffer.dtype)
+    print("colored_seg_buffer.shape:", colored_seg_buffer.shape)
 
     # For grayscale images
     # Adjust depending on your preprocessing
-    x_np = batch["x"].cpu().numpy()  # [B, H, W, C] or [B, H, W]
 
     x_norm = Normalize(
         vmin=x_np.min(),
         vmax=x_np.max(),
     )
 
-    colored_x = plt.cm.gray(x_norm(x_np))  # -> [B, H, W, 4]
+    colored_x = plt.cm.gray(x_norm(x_np), bytes=True)  # -> [B, H, W, 4]
     seg_mask = (segs == 0)[..., None]  # background mask
     test_img_buffer = np.where(
         seg_mask,
@@ -120,7 +137,7 @@ def mk_anim(batch: dict[str, Tensor], segs: np.ndarray) -> FuncAnimation:
     T, B, H, W, _ = test_img_buffer.shape
     # Normalize inputs for display
     x_norm = Normalize(vmin=x_np.min(), vmax=x_np.max())
-    x_gray = plt.cm.gray(x_norm(x_np))[:, :, :, :3]  # [B, H, W, 3]
+    x_gray = plt.cm.gray(x_norm(x_np), bytes=True)[:, :, :, :3]  # [B, H, W, 3]
 
     fig, axes = plt.subplots(
         2, B,

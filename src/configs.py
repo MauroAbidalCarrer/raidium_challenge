@@ -107,7 +107,7 @@ TRAIN_CONFIGS = {
         mask_ratio = 0,
         sampling = "weighted",
         dice_loss = "custom",
-        checkpointing_interval = 1,
+        checkpointing_interval = 2,
         transform = v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),

@@ -21,21 +21,21 @@ N_CHKPT_TO_PLT = -1
 def main():
     args = parse_args()
     dataset.mk_dataset()
+    vid_cache_dir = args.vid_cache or "train_vid_cache"
+    
     if args.checkpoints is not None:
         batch = mk_preprocessed_batch(50)
         segs = mk_segs_preds_over_epochs(batch, args.checkpoints)
         save_segs_and_batch(batch, segs)
     elif args.vid_cache is not None:
         print("Making animation from cached segmentation.")
-        segs = np.load(f"{args.vid_cache}/segs.npy")
-        batch = torch.load(f"{args.vid_cache}/batch.pt")
+        segs = np.load(f"{vid_cache_dir}/segs.npy")
+        batch = torch.load(f"{vid_cache_dir}/batch.pt")
     anim = mk_anim(batch, segs)
-    anim.save(
-        "segmentation_animation.mp4",
-        fps=30,
-        dpi=150,
-    )
-    print("Saved animation at ./segmentation_animation.mp4")
+    anim_path = os.path.join(vid_cache_dir, "segmentation_animation.mp4")
+    os.makedirs(vid_cache_dir, exist_ok=True)
+    anim.save(anim_path, fps=30, dpi=150)
+    print(f"Saved animation at {anim_path}")
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Segmentation visualization")
@@ -104,40 +104,53 @@ def load_chkpt(chkpt_pth: str) -> torch.nn.Module:
     model = model.eval()
     return model
 
+# This is a really shitty function
 def mk_anim(
         batch: dict[str, Tensor],
         segs: np.ndarray,
         n_samples_to_plt: int = 6,
     ) -> FuncAnimation:
     # Keep the first n_samples_to_plt
-    x_np = (
+    x = (
         batch["x"]
         .cpu()
         .numpy()
         [:n_samples_to_plt]
-    )  # [B, H, W, C] or [B, H, W]
+    )
+    y_true = (
+        batch["y_true"]
+        .cpu()
+        .numpy()
+        [:n_samples_to_plt]
+    )
     segs = segs[:, :n_samples_to_plt]
     # For segmentation labels (categorical)
-    seg_norm = Normalize(vmin=0, vmax=cfg.N_CLASSES - 1)
-    x_norm = Normalize(x_np.min(), x_np.max())
-
-    colored_seg = plt.cm.rainbow(seg_norm(segs), bytes=True)  # -> [B, H, W, 4]
-    colored_x = plt.cm.gray(x_norm(x_np), bytes=True)  # -> [B, H, W, 4]
+    y_norm = Normalize(vmin=0, vmax=cfg.N_CLASSES - 1)
+    x_norm = Normalize(x.min(), x.max())
+    
+    colored_y_pred = plt.cm.tab20(y_norm(segs), bytes=True)  # -> [B, H, W, 4]
+    colored_y_true = plt.cm.tab20(y_norm(y_true), bytes=True)
+    colored_x = plt.cm.gray(x_norm(x), bytes=True)  # -> [B, H, W, 4]
     # Put the seg on top of the 
     seg_mask = (segs == 0)[..., None]  # background mask
-    test_img_buffer = np.where(
+    y_pred_imgs = np.where(
         seg_mask,
         colored_x[None, :, 0],
-        colored_seg,
+        colored_y_pred,
+    )
+    y_true_imgs = np.where(
+        seg_mask,
+        colored_x[None, :, 0],
+        colored_y_true,
     )
 
     # Remove alpha channel
-    test_img_buffer = test_img_buffer[..., :3]  # [model_step, B, H, W, 3]
+    y_pred_imgs = y_pred_imgs[..., :3]  # [model_step, B, H, W, 3]
 
-    n_frames, batch_size, *_ = test_img_buffer.shape
+    n_frames, batch_size, *_ = y_pred_imgs.shape
 
     fig, axes = plt.subplots(
-        2, batch_size,
+        3, batch_size,
         figsize=(3 * batch_size, 6),
         squeeze=False
     )
@@ -147,14 +160,16 @@ def mk_anim(
         axes[0, j].imshow(colored_x[j, 0])
         axes[0, j].set_title(f"Input {j}")
         axes[0, j].axis("off")
-        im = axes[1, j].imshow(test_img_buffer[0, j])
+        im = axes[1, j].imshow(y_pred_imgs[0, j])
         axes[1, j].set_title(f"Pred {j}")
         axes[1, j].axis("off")
         seg_ims.append(im)
+        axes[2, j].imshow(y_true_imgs[0, j])
+        axes[2, j].axis("off")
 
     def update(t):
         for j in range(batch_size):
-            seg_ims[j].set_data(test_img_buffer[t, j])
+            seg_ims[j].set_data(y_pred_imgs[t, j])
         return seg_ims
 
     anim = FuncAnimation(

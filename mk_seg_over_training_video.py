@@ -97,11 +97,9 @@ def mk_anim(
         batch["x"]
         .cpu()
         .numpy()
-        [:, :n_samples_to_plt]
+        [:n_samples_to_plt]
     )  # [B, H, W, C] or [B, H, W]
     segs = segs[:, :n_samples_to_plt]
-    print('batch["x"].dtype:', x_np.dtype)
-    print("segs.shape:", segs.shape)
 
 
     # For segmentation labels (categorical)
@@ -110,9 +108,7 @@ def mk_anim(
         vmax=cfg.N_CLASSES - 1,   # important: categorical, fixed range
     )
 
-    colored_seg_buffer = plt.cm.rainbow(seg_norm(segs), bytes=True)  # -> [B, H, W, 4]
-    print("colored_seg_buffer.dtype:", colored_seg_buffer.dtype)
-    print("colored_seg_buffer.shape:", colored_seg_buffer.shape)
+    colored_seg = plt.cm.rainbow(seg_norm(segs), bytes=True)  # -> [B, H, W, 4]
 
     # For grayscale images
     # Adjust depending on your preprocessing
@@ -121,51 +117,44 @@ def mk_anim(
         vmin=x_np.min(),
         vmax=x_np.max(),
     )
-
-    colored_x = plt.cm.gray(x_norm(x_np), bytes=True)  # -> [B, H, W, 4]
+    gray_x = plt.cm.gray(x_norm(x_np), bytes=True)  # -> [B, H, W, 4]
     seg_mask = (segs == 0)[..., None]  # background mask
     test_img_buffer = np.where(
         seg_mask,
-        colored_x[None, :, 0],
-        colored_seg_buffer,
+        gray_x[None, :, 0],
+        colored_seg,
     )
 
     # Remove alpha channel
     test_img_buffer = test_img_buffer[..., :3]  # [model_step, B, H, W, 3]
 
-
-    T, B, H, W, _ = test_img_buffer.shape
-    # Normalize inputs for display
-    x_norm = Normalize(vmin=x_np.min(), vmax=x_np.max())
-    x_gray = plt.cm.gray(x_norm(x_np), bytes=True)[:, :, :, :3]  # [B, H, W, 3]
+    n_frames, batch_size, *_ = test_img_buffer.shape
 
     fig, axes = plt.subplots(
-        2, B,
-        figsize=(3 * B, 6),
+        2, batch_size,
+        figsize=(3 * batch_size, 6),
         squeeze=False
     )
 
-    for j in range(B):
-        axes[0, j].imshow(x_gray[j])
+    seg_ims = []
+    for j in range(batch_size):
+        axes[0, j].imshow(gray_x[j, 0])
         axes[0, j].set_title(f"Input {j}")
         axes[0, j].axis("off")
-
-    seg_ims = []
-    for j in range(B):
         im = axes[1, j].imshow(test_img_buffer[0, j])
         axes[1, j].set_title(f"Pred {j}")
         axes[1, j].axis("off")
         seg_ims.append(im)
 
     def update(t):
-        for j in range(B):
+        for j in range(batch_size):
             seg_ims[j].set_data(test_img_buffer[t, j])
         return seg_ims
 
     anim = FuncAnimation(
         fig,
         update,
-        frames=T,
+        frames=n_frames,
         interval=30,
         blit=False,
         repeat=True,

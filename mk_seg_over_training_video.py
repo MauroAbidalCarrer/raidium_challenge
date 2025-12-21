@@ -63,13 +63,12 @@ def mk_preprocessed_batch(batch_size: int) -> dict[str, Tensor]:
     batch = dataset.preprocess_batch({"x": x, "y_true": y_true})
     return batch
 
-def save_segs_and_batch(batch: dict[str, Tensor], segs: np.ndarray) -> np.ndarray:
+def save_segs_and_batch(batch: dict[str, Tensor], segs: np.ndarray):
     os.makedirs("video_cache", exist_ok=True)
     batch = {k: v.detach().cpu() for k, v in batch.items()}
     torch.save(batch, "video_cache/batch.pt")
     np.save("video_cache/segs.npy", segs, allow_pickle=False)
     print("Saved segmentations and batch in vid_cache directory.")
-    return segs
 
 def mk_segs_preds_over_epochs(batch: dict[str, Tensor], chkpt_directory: str) -> Tensor:
     chkpt_filenames = os.listdir(chkpt_directory)[:N_CHKPT_TO_PLT]
@@ -138,6 +137,7 @@ def mk_anim(
         colored_x[None, :, 0],
         colored_y_pred,
     )
+    seg_mask = (y_true == 0)[..., None]  # background mask
     y_true_imgs = np.where(
         seg_mask,
         colored_x[None, :, 0],

@@ -75,7 +75,7 @@ class Trainer:
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
-            if (self.epoch % 50 == 0 and self.epoch != 0) or is_last_epoch:
+            if (self.epoch % self.cfg.checkpointing_interval == 0 and self.epoch != 0) or is_last_epoch:
                 self.save_checkpoint(chkpt_pth_format)
 
     def save_checkpoint(self, chkpt_pth_format: str):

@@ -5,6 +5,7 @@ from typing import (
     Tuple,
     Dict,
 )
+from transformers import SwinConfig
 from dataclasses import dataclass, field
 
 import torch
@@ -122,6 +123,9 @@ TRAIN_CONFIGS = {
             v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
         ]),
     )
+    # "swin_pretraining": {
+
+    # }
 }
 
 OPTIM_CFGS = {
@@ -153,7 +157,7 @@ class ModelConfig:
     constructor_kwargs: dict = field(default_factory=dict)
     downscaling: Optional[int] = None
 
-MODELS_CFGS = {
+MODELS_CFGS: dict[str, ModelConfig] = {
     "downscaled_vit": ModelConfig(
         architecutre="mae_vit",
         constructor_kwargs={"patch_size": 8},
@@ -168,4 +172,18 @@ MODELS_CFGS = {
             "norm": "instance",
         }
     ),
+    "downscaled_swin_vit": ModelConfig(
+        architecture="hf_swin_vit",
+        constructor_kwargs={
+                "config": SwinConfig(
+                    image_size=128,
+                    patch_size=4,
+                    embed_dim=128,
+                    depths=[2, 2, 18, 2],
+                    num_heads=[4, 8, 16, 32],
+                    window_size=6,
+                )
+        },
+        downscaling=2,
+    )
 }

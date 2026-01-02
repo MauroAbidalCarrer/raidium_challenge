@@ -11,6 +11,18 @@ from monai.networks.nets import UNet
 from einops.layers.torch import Rearrange
 from timm.models.layers import trunc_normal_
 from timm.models.vision_transformer import Block
+from transformers import (
+    CONFIG_MAPPING,
+    IMAGE_PROCESSOR_MAPPING,
+    MODEL_FOR_MASKED_IMAGE_MODELING_MAPPING,
+    AutoConfig,
+    AutoImageProcessor,
+    AutoModelForMaskedImageModeling,
+    HfArgumentParser,
+    Trainer,
+    TrainingArguments,
+)
+
 
 import src.configs as cfg
 
@@ -335,6 +347,8 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
             image_size=256 // model_cfg.downscaling or 1,
             **kwargs
         )
+    elif model_cfg.architecutre == "downscaled_swin_vit":
+         model = AutoModelForMaskedImageModeling.from_config(model_cfg)
     if model_cfg.compile:
         model = torch.compile(model)
     if model_cfg.downscaling is not None:

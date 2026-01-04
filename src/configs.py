@@ -125,7 +125,7 @@ TRAIN_CONFIGS = {
     ),
     "swin_pretraining": TrainingConfig(
         n_epochs=10,
-        batch_size=64,
+        batch_size=32,
     )
 }
 

@@ -7,7 +7,7 @@ from typing import Optional, Any
 
 import torch
 import numpy as np
-from torch import nn
+from torch import nn, Tensor
 from datasets import load_dataset
 from torchvision.transforms import Compose, Lambda, Normalize, RandomHorizontalFlip, RandomResizedCrop, ToTensor
 import transformers
@@ -98,12 +98,15 @@ class HFMaskedImageModelWrapper(nn.Module):
             pixel_values=pixel_values,
             bool_masked_pos=bool_masked_pos,
         )
+        
 
-        return outputs
+        return vars(outputs)
+
+
+def ssl_loss(forward_dict: dict[str, Any]) -> dict[str, Tensor]:
+    return {"loss": forward_dict["loss"], "rec_l1_loss": forward_dict["loss"]}
 
 def main():
-    # check_min_version("4.57.0.dev0")
-    # require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/image-pretraining/requirements.txt")
     model_cfg = cfg.MODELS_CFGS["downscaled_swin_vit"]
     model = models.mk_model_from_cfg(model_cfg)
     mask_generator = MaskGenerator(
@@ -113,6 +116,7 @@ def main():
         mask_ratio=0.75,
     )
     model = HFMaskedImageModelWrapper(model, mask_generator)
+    model.cfg = model_cfg
 
     optim = training.mk_optimizer(model, cfg.OPTIM_CFGS["downscaled_vit_pretraining"])
     lr_scheduler = training.mk_lr_scheduler(cfg.TRAIN_CONFIGS["swin_pretraining"], optim)
@@ -136,7 +140,7 @@ def main():
     )
     trainer.train_model(
         data_loaders,
-        metrics.SelfSupervisedLoss(train_cfg),
+        ssl_loss,
         "checkpoints/swin_MiM/{wandb_run_name}/swin_ssl_epoch_{epoch}.pt",
     )
 

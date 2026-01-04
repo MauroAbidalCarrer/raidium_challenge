@@ -189,15 +189,21 @@ def mk_ssl_loaders(train_cfg: TrainingConfig) -> dict[str, DataLoader]:
         test_size=train_cfg.test_size,
         random_state=train_cfg.random_state,
     )
-    mk_dl_from_tensor = lambda t: DataLoader(TensorDataset(t), train_cfg.batch_size)
+    mk_dl_from_tensor = lambda t: DataLoader(TensorDataset(t), train_cfg.batch_size, collate_fn=collate_ssl_batch)
     return {
         "train": mk_dl_from_tensor(x_train),
         "valid": mk_dl_from_tensor(x_valid),
     }
 
+def collate_ssl_batch(batch: list[Tensor]) -> dict[str, Tensor]:
+    xs = [sample[0] for sample in batch]
+    return {"x": torch.cat(xs, dim=0)}
+
 def preprocess_batch(batch_dict: dict[str, Any]) -> dict[str, Any]:
     x = batch_dict["x"]
     x = x.to(device=DEVICE, dtype=torch.float)
+    if x.shape != 4:
+        x = x.unsqueeze(1)
     batch_dict["x"] = (x - cfg.X_MEAN) / cfg.X_STD
     if "y_true" in batch_dict:
         batch_dict["y_true"] = (

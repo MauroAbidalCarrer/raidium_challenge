@@ -198,9 +198,9 @@ class Trainer:
         eval_dict: dict[str, Tensor] = defaultdict(mk_epoch_buff)
         seg_preds = []
         seg_y_true = []
-        for batch_i, (x, y_true) in enumerate(data_loader):
-            batch_dict = {"x": x, "y_true": y_true}
+        for batch_i, batch_dict in enumerate(data_loader):
             batch_dict = dataset.preprocess_batch(batch_dict)
+            print(batch_dict["x"].shape)
             with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
                 model_output_dict = self.model(batch_dict)
                 print(model_output_dict)

@@ -184,14 +184,15 @@ MODELS_CFGS: dict[str, ModelConfig] = {
         architecture="hf_swin_vit",
         constructor_kwargs={
                 "config": SwinConfig(
-                    image_size=128,
+                    image_size=256,
                     patch_size=4,
                     embed_dim=128,
                     depths=[2, 2, 18, 2],
                     num_heads=[4, 8, 16, 32],
                     window_size=6,
+                    num_channels=1,
                 )
         },
-        downscaling=2,
+        #downscaling=2,
     )
 }

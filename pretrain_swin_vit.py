@@ -88,26 +88,22 @@ class HFMaskedImageModelWrapper(nn.Module):
         pixel_values = batch[self.image_key]
 
         # Generate mask only during training
-        if self.training:
-            # HF expects (B, num_patches)
-            bool_masked_pos = torch.stack(
-                [self.mask_generator() for _ in range(pixel_values.shape[0])],
-                dim=0,
-            ).to(pixel_values.device)
+        # HF expects (B, num_patches)
+        bool_masked_pos = torch.stack(
+            [self.mask_generator() for _ in range(pixel_values.shape[0])],
+            dim=0,
+        ).to(pixel_values.device)
 
-            outputs = self.model(
-                pixel_values=pixel_values,
-                bool_masked_pos=bool_masked_pos,
-            )
-        else:
-            outputs = self.model(pixel_values=pixel_values)
+        outputs = self.model(
+            pixel_values=pixel_values,
+            bool_masked_pos=bool_masked_pos,
+        )
 
         return outputs
 
 def main():
     # check_min_version("4.57.0.dev0")
     # require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/image-pretraining/requirements.txt")
-
     model_cfg = cfg.MODELS_CFGS["downscaled_swin_vit"]
     model = models.mk_model_from_cfg(model_cfg)
     mask_generator = MaskGenerator(

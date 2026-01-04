@@ -203,6 +203,8 @@ class Trainer:
             batch_dict = dataset.preprocess_batch(batch_dict)
             with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
                 model_output_dict = self.model(batch_dict)
+                print(model_output_dict)
+                exit(0)
                 loss_dict = criterion(batch_dict | model_output_dict)
             loss_dict["loss_norm"] = torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),

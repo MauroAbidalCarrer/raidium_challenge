@@ -122,10 +122,11 @@ TRAIN_CONFIGS = {
             v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
             v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
         ]),
+    ),
+    "swin_pretraining": TrainingConfig(
+        n_epochs=10,
+        batch_size=64,
     )
-    # "swin_pretraining": {
-
-    # }
 }
 
 OPTIM_CFGS = {
@@ -142,6 +143,13 @@ WANDB_RUN_TAGS = {
         "mae_vit",
         "ssl"
     ],
+    "downscaled_swin_pretraining": [
+        "pretraining",
+        "downscaled",
+        "swin_vit",
+        "MiM"
+        "ssl"
+    ],
     "finetuning": [
         "finetuning",
         "downscaled",
@@ -152,19 +160,19 @@ WANDB_RUN_TAGS = {
 
 @dataclass
 class ModelConfig:
-    architecutre: str
+    architecture: str
     compile: bool = False
     constructor_kwargs: dict = field(default_factory=dict)
     downscaling: Optional[int] = None
 
 MODELS_CFGS: dict[str, ModelConfig] = {
     "downscaled_vit": ModelConfig(
-        architecutre="mae_vit",
+        architecture="mae_vit",
         constructor_kwargs={"patch_size": 8},
         downscaling=2,
     ),
     "unet": ModelConfig(
-        architecutre="unet",
+        architecture="unet",
         constructor_kwargs={
             "channels": (64, 128, 256, 512, 512),
             "num_res_units": 2,

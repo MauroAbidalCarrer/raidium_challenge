@@ -153,32 +153,46 @@ def cls_presence_mask(y_train: Tensor) -> Tensor:
         cls_presence[:, class_idx] = (y_train == class_idx).any(dim=(1, 2))
     return cls_presence
 
-def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, DataLoader]:
-    x_train, y_train, x_test = load_raw_dataset(DEVICE)
-    x_train, x_valid, y_train, y_valid = train_test_split(
-        x_train,
-        y_train,
+# def mk_semi_supervised_data_loaders(train_cfg: TrainingConfig) -> dict[str, DataLoader]:
+#     x_train, y_train, x_test = load_raw_dataset(DEVICE)
+#     x_train, x_valid, y_train, y_valid = train_test_split(
+#         x_train,
+#         y_train,
+#         test_size=train_cfg.test_size,
+#         random_state=train_cfg.random_state,
+#     )
+#     x_train = torch.cat((x_train, x_test))
+#     y_test_zeros = torch.zeros(
+#         x_test.shape[0], 256, 256,
+#         dtype=torch.uint8,
+#         device=y_train.device,
+#     )
+
+#     y_train = torch.cat((y_train, y_test_zeros))
+#     train_dataset = TensorDataset(x_train, y_train)
+#     valid_dataset = TensorDataset(x_valid, y_valid)
+#     test_dataset  = TensorDataset(x_test, y_test_zeros)
+#     train_loader = DataLoader(train_dataset, train_cfg.batch_size, shuffle=True)
+#     valid_loader = DataLoader(valid_dataset, train_cfg.batch_size)
+#     test_loader = DataLoader(test_dataset, train_cfg.batch_size)
+#     return {
+#         "train": train_loader,
+#         "valid": valid_loader,
+#         "test":  test_loader,
+#     }
+
+def mk_ssl_loaders(train_cfg: TrainingConfig) -> dict[str, DataLoader]:
+    x_train, _, x_test = load_raw_dataset(DEVICE)
+    x = torch.cat((x_train, x_test))
+    x_train, x_valid = train_test_split(
+        x,
         test_size=train_cfg.test_size,
         random_state=train_cfg.random_state,
     )
-    x_train = torch.cat((x_train, x_test))
-    y_test_zeros = torch.zeros(
-        x_test.shape[0], 256, 256,
-        dtype=torch.uint8,
-        device=y_train.device,
-    )
-
-    y_train = torch.cat((y_train, y_test_zeros))
-    train_dataset = TensorDataset(x_train, y_train)
-    valid_dataset = TensorDataset(x_valid, y_valid)
-    test_dataset  = TensorDataset(x_test, y_test_zeros)
-    train_loader = DataLoader(train_dataset, train_cfg.batch_size, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, train_cfg.batch_size)
-    test_loader = DataLoader(test_dataset, train_cfg.batch_size)
+    mk_dl_from_tensor = lambda t: DataLoader(TensorDataset(t), train_cfg.batch_size)
     return {
-        "train": train_loader,
-        "valid": valid_loader,
-        "test":  test_loader,
+        "train": mk_dl_from_tensor(x_train),
+        "valid": mk_dl_from_tensor(x_valid),
     }
 
 def preprocess_batch(batch_dict: dict[str, Any]) -> dict[str, Any]:

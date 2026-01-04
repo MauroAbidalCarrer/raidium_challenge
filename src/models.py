@@ -23,7 +23,6 @@ from transformers import (
     TrainingArguments,
 )
 
-
 import src.configs as cfg
 
 
@@ -328,7 +327,7 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
     kwargs = model_cfg.constructor_kwargs
     downscaling_remainder = 256 % (model_cfg.downscaling or 1)
     assert downscaling_remainder == 0, f"Downscaling remainder must be 0, got {downscaling_remainder}."
-    if model_cfg.architecutre == "unet":
+    if model_cfg.architecture == "unet":
         channels = kwargs["channels"]
         model = (
             UnetWrapper(
@@ -342,17 +341,17 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
             )
             .to(cfg.DEVICE)
         )
-    elif model_cfg.architecutre == "mae_vit":
+    elif model_cfg.architecture == "mae_vit":
         model = MAE_ViT(
             image_size=256 // model_cfg.downscaling or 1,
             **kwargs
         )
-    elif model_cfg.architecutre == "downscaled_swin_vit":
-         model = AutoModelForMaskedImageModeling.from_config(model_cfg)
-    if model_cfg.compile:
-        model = torch.compile(model)
+    elif model_cfg.architecture == "hf_swin_vit":
+         model = AutoModelForMaskedImageModeling.from_config(**model_cfg.constructor_kwargs)
     if model_cfg.downscaling is not None:
         model = DownScalingWrapper(model, model_cfg.downscaling)
+    if model_cfg.compile:
+        model = torch.compile(model)
     model.cfg = model_cfg
     model = model.to(cfg.DEVICE)
     return model

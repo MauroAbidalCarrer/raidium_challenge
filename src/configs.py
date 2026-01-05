@@ -50,6 +50,7 @@ class TrainingConfig:
     dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
     max_loss_norm: float = 1
     checkpointing_interval: int  = 5
+    eval_interval: int = 50
 
 TRAIN_CONFIGS = {
     "pretraining": TrainingConfig(
@@ -124,8 +125,10 @@ TRAIN_CONFIGS = {
         ]),
     ),
     "swin_pretraining": TrainingConfig(
-        n_epochs=10,
+        n_epochs=20,
         batch_size=32,
+        transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
+        eval_interval=5,
     )
 }
 

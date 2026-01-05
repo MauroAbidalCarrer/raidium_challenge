@@ -69,7 +69,7 @@ class Trainer:
         )
         for _ in epoch_it:
             is_last_epoch = self.epoch == self.cfg.n_epochs - 1
-            if self.epoch % 50 == 0 or is_last_epoch:
+            if self.epoch % self.cfg.eval_interval == 0 or is_last_epoch:
                 with timing.time_to_run("evaluation/total"):
                     self.evaluate_model(data_loaders, criterion=criterion)
             with timing.time_to_run("training/total"):
@@ -200,7 +200,6 @@ class Trainer:
         seg_y_true = []
         for batch_i, batch_dict in enumerate(data_loader):
             batch_dict = dataset.preprocess_batch(batch_dict)
-            print(batch_dict["x"].shape)
             with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
                 model_output_dict = self.model(batch_dict)
                 loss_dict = criterion(batch_dict | model_output_dict)

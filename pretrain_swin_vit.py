@@ -104,7 +104,11 @@ class HFMaskedImageModelWrapper(nn.Module):
 
 
 def ssl_loss(forward_dict: dict[str, Any]) -> dict[str, Tensor]:
-    return {"loss": forward_dict["loss"], "rec_l1_loss": forward_dict["loss"]}
+    return {
+            "loss": forward_dict["loss"],
+            "rec_l1_loss": forward_dict["loss"],
+            "rec_l2_loss": forward_dict["loss"] ** 2,
+    }
 
 def main():
     model_cfg = cfg.MODELS_CFGS["downscaled_swin_vit"]

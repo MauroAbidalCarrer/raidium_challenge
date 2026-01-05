@@ -26,6 +26,77 @@ from transformers import (
 import src.configs as cfg
 
 
+
+
+class MaskGenerator:
+    """
+    A class to generate boolean masks for the pretraining task.
+
+    A mask is a 1D tensor of shape (model_patch_size**2,) where the value is either 0 or 1,
+    where 1 indicates "masked".
+    """
+
+    def __init__(self, input_size=256, mask_patch_size=32, model_patch_size=4, mask_ratio=0.6):
+        self.input_size = input_size
+        self.mask_patch_size = mask_patch_size
+        self.model_patch_size = model_patch_size
+        self.mask_ratio = mask_ratio
+
+        if self.input_size % self.mask_patch_size != 0:
+            raise ValueError("Input size must be divisible by mask patch size")
+        if self.mask_patch_size % self.model_patch_size != 0:
+            raise ValueError("Mask patch size must be divisible by model patch size")
+
+        self.rand_size = self.input_size // self.mask_patch_size
+        self.scale = self.mask_patch_size // self.model_patch_size
+
+        self.token_count = self.rand_size**2
+        self.mask_count = int(np.ceil(self.token_count * self.mask_ratio))
+
+    def __call__(self):
+        mask_idx = np.random.permutation(self.token_count)[: self.mask_count]
+        mask = np.zeros(self.token_count, dtype=int)
+        mask[mask_idx] = 1
+
+        mask = mask.reshape((self.rand_size, self.rand_size))
+        mask = mask.repeat(self.scale, axis=0).repeat(self.scale, axis=1)
+
+        return torch.tensor(mask.flatten())
+
+class HFMaskedImageModelWrapper(nn.Module):
+    """Cheap warp around, should get cleaned up."""
+    def __init__(
+        self,
+        model: nn.Module,
+        mask_generator,
+        image_key: str = "x",
+    ):
+        super().__init__()
+        self.model = model
+        self.mask_generator = mask_generator
+        self.image_key = image_key
+
+    def forward(self, batch: dict[str, Any]) -> dict[str, Any]:
+        pixel_values = batch[self.image_key]
+
+        # Generate mask only during training
+        # HF expects (B, num_patches)
+        bool_masked_pos = torch.stack(
+            [self.mask_generator() for _ in range(pixel_values.shape[0])],
+            dim=0,
+        ).to(pixel_values.device)
+
+        outputs = self.model(
+            pixel_values=pixel_values,
+            bool_masked_pos=bool_masked_pos,
+        )
+        outputs = vars(outputs)
+        if "reconstructed_pixel_values" in outputs:
+            outputs["x_hat"] = outputs["reconstructed_pixel_values"]
+        return outputs
+
+
+
 def gather_batch(x: Tensor, idx: Tensor) -> Tensor:
     """
     Gather tokens from x (B, T, C) according to idx (B, T_idx) per-batch.
@@ -347,7 +418,14 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
             **kwargs
         )
     elif model_cfg.architecture == "hf_swin_vit":
-         model = AutoModelForMaskedImageModeling.from_config(**model_cfg.constructor_kwargs)
+        mask_generator = MaskGenerator(
+            input_size=model_cfg.constructor_kwargs["config"].image_size,
+            mask_patch_size=32, # check in more details how this works
+            model_patch_size=model_cfg.constructor_kwargs["config"].patch_size,
+            mask_ratio=0.75,
+        )
+        model = AutoModelForMaskedImageModeling.from_config(**model_cfg.constructor_kwargs)
+        model = HFMaskedImageModelWrapper(model, mask_generator)
     if model_cfg.downscaling is not None:
         model = DownScalingWrapper(model, model_cfg.downscaling)
     if model_cfg.compile:

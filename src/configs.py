@@ -5,6 +5,7 @@ from typing import (
     Tuple,
     Dict,
 )
+from transformers import SwinConfig
 from dataclasses import dataclass, field
 
 import torch
@@ -49,6 +50,7 @@ class TrainingConfig:
     dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
     max_loss_norm: float = 1
     checkpointing_interval: int  = 5
+    eval_interval: int = 50
 
 TRAIN_CONFIGS = {
     "pretraining": TrainingConfig(
@@ -121,6 +123,13 @@ TRAIN_CONFIGS = {
             v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
             v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
         ]),
+    ),
+    "swin_pretraining": TrainingConfig(
+        n_epochs=1000,
+        batch_size=64,
+        transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
+        eval_interval=10,
+        checkpointing_interval=50,
     )
 }
 
@@ -138,6 +147,13 @@ WANDB_RUN_TAGS = {
         "mae_vit",
         "ssl"
     ],
+    "downscaled_swin_pretraining": [
+        "pretraining",
+        "downscaled",
+        "swin_vit",
+        "MiM"
+        "ssl"
+    ],
     "finetuning": [
         "finetuning",
         "downscaled",
@@ -148,19 +164,19 @@ WANDB_RUN_TAGS = {
 
 @dataclass
 class ModelConfig:
-    architecutre: str
+    architecture: str
     compile: bool = False
     constructor_kwargs: dict = field(default_factory=dict)
     downscaling: Optional[int] = None
 
-MODELS_CFGS = {
+MODELS_CFGS: dict[str, ModelConfig] = {
     "downscaled_vit": ModelConfig(
-        architecutre="mae_vit",
+        architecture="mae_vit",
         constructor_kwargs={"patch_size": 8},
         downscaling=2,
     ),
     "unet": ModelConfig(
-        architecutre="unet",
+        architecture="unet",
         constructor_kwargs={
             "channels": (64, 128, 256, 512, 512),
             "num_res_units": 2,
@@ -168,4 +184,21 @@ MODELS_CFGS = {
             "norm": "instance",
         }
     ),
+    "downscaled_swin_vit": ModelConfig(
+        architecture="hf_swin_vit",
+        constructor_kwargs={
+                "config": SwinConfig(
+                    image_size=256,
+                    patch_size=4,
+                    embed_dim=128,
+                    depths=[2, 2, 2, 2],
+                    num_heads=[4, 8, 16, 32],
+                    window_size=6,
+                    num_channels=1,
+                ),
+                "mask": {"mask_patch_size": 16, "mask_ratio": 0.75},
+        },
+        # downscaling=2,
+        compile=True,
+    )
 }

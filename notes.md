@@ -14,11 +14,9 @@ ideas:
     - save checkpoint as artifact on wandb
 
 todo:
-- in parallel:
-    - confusion matrix metrics
-    - Get better score with unet:
-        - decrease test size
-    - TTA
+- add the swin config params to the wandb run params
+- confusion matrix metrics
+- TTA
 
 at the end of the competion:
 - today:

@@ -2,6 +2,7 @@ import os
 import warnings
 from itertools import product
 from typing import Any, Optional
+from dataclasses import is_dataclass
 from collections import defaultdict
 
 import torch
@@ -69,7 +70,7 @@ class Trainer:
         )
         for _ in epoch_it:
             is_last_epoch = self.epoch == self.cfg.n_epochs - 1
-            if self.epoch % 50 == 0 or is_last_epoch:
+            if self.epoch % self.cfg.eval_interval == 0 or is_last_epoch:
                 with timing.time_to_run("evaluation/total"):
                     self.evaluate_model(data_loaders, criterion=criterion)
             with timing.time_to_run("training/total"):
@@ -118,8 +119,7 @@ class Trainer:
         n_batches = len(train_loader)
         mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
         epochs_steps_dicts: dict[str, Tensor] = defaultdict(mk_epoch_buff)
-        for batch_i, (x, y_true) in enumerate(train_loader):
-            batch_dict = {"x": x, "y_true": y_true}
+        for batch_i, batch_dict in enumerate(train_loader):
             batch_dict = dataset.preprocess_batch(batch_dict)
             with timing.time_to_run("training/step"):
                 step_dict = self.perform_training_step(batch_dict, criterion)
@@ -129,9 +129,9 @@ class Trainer:
         epoch_dict["training_samples_seen"] = self.training_samples_seen
         epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         self.epoch += 1
-        confuse_mat_metric_agg = self.confuse_mat_metric.aggregate()
         self.confuse_mat_metric.reset()
-        epoch_dict["confuse_mat_metric"] = confuse_mat_metric_agg
+        #confuse_mat_metric_agg = self.confuse_mat_metric.aggregate()
+        #epoch_dict["confuse_mat_metric"] = confuse_mat_metric_agg
         return epoch_dict
 
     def perform_training_step(
@@ -140,10 +140,11 @@ class Trainer:
             criterion: cfg.criterion_t,
         ) -> dict[str, Tensor]:
         if self.cfg.transform:
-            batch_dict["x"], batch_dict["y_true"] = self.cfg.transform(
-                batch_dict["x"],
-                batch_dict["y_true"],
-            )
+#            batch_dict["x"], batch_dict["y_true"] = self.cfg.transform(
+#                batch_dict["x"],
+#                batch_dict["y_true"],
+#            )
+            batch_dict = self.cfg.transform(batch_dict)
         self.optimizer.zero_grad()
         with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
             with timing.time_to_run("training/forward"):
@@ -198,8 +199,7 @@ class Trainer:
         eval_dict: dict[str, Tensor] = defaultdict(mk_epoch_buff)
         seg_preds = []
         seg_y_true = []
-        for batch_i, (x, y_true) in enumerate(data_loader):
-            batch_dict = {"x": x, "y_true": y_true}
+        for batch_i, batch_dict in enumerate(data_loader):
             batch_dict = dataset.preprocess_batch(batch_dict)
             with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
                 model_output_dict = self.model(batch_dict)
@@ -210,18 +210,20 @@ class Trainer:
             )
             for k, v in loss_dict.items():
                 eval_dict[k][batch_i] = v.detach()
-            pred = torch.argmax(model_output_dict["y_pred"], dim=1)
-            seg_y_true.append(batch_dict["y_true"].squeeze().cpu().numpy())
-            seg_preds.append(pred.squeeze().cpu().numpy())
-            self.confuse_mat_metric_step(batch_dict, model_output_dict)
+            if "y_pred" in model_output_dict:
+                pred = torch.argmax(model_output_dict["y_pred"], dim=1)
+                seg_y_true.append(batch_dict["y_true"].squeeze().cpu().numpy())
+                seg_preds.append(pred.squeeze().cpu().numpy())
+                self.confuse_mat_metric_step(batch_dict, model_output_dict)
         eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
         eval_dict["training_samples_seen"] = self.training_samples_seen
-        eval_dict["confuse_mat_metric"] = self.confuse_mat_metric.aggregate()
+        if len(data_loader) and "y_pred" in model_output_dict:
+            eval_dict["confuse_mat_metric"] = self.confuse_mat_metric.aggregate()
+            with timing.time_to_run("evaluation/dice_score"):
+                seg_preds = np.concat(seg_preds).reshape(-1 , 256 * 256)
+                seg_y_true = np.concat(seg_y_true).reshape(-1, 256 * 256)
+                eval_dict["dice_score"] = metrics.dice_pandas(seg_y_true, seg_preds)
         self.confuse_mat_metric.reset()
-        with timing.time_to_run("evaluation/dice_score"):
-            seg_preds = np.concat(seg_preds).reshape(-1 , 256 * 256)
-            seg_y_true = np.concat(seg_y_true).reshape(-1, 256 * 256)
-            eval_dict["dice_score"] = metrics.dice_pandas(seg_y_true, seg_preds)
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
@@ -265,12 +267,16 @@ def wandb_init(
         tags: Optional[list[str]]=[],
         group: Optional[str]=None
     ) -> wandb.Run:
-    cfg_vars = {}
+    cfgs_vars = {}
     for cfg in configs:
-        cfg_vars |= vars(cfg)
+        cfg_vars = vars(cfg)
+        for k, v in cfg_vars.items(): # Should be recursive
+            if is_dataclass(v):
+                cfg_vars[k] = vars(v)
+        cfgs_vars |= cfg_vars
     return wandb.init(
         project="raidium-challenge",
-        config={**cfg_vars,},
+        config={**cfgs_vars,},
         tags=tags,
         group=group,
     )

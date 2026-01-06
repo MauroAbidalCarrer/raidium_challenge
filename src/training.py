@@ -2,6 +2,7 @@ import os
 import warnings
 from itertools import product
 from typing import Any, Optional
+from dataclasses import is_dataclass
 from collections import defaultdict
 
 import torch
@@ -266,12 +267,16 @@ def wandb_init(
         tags: Optional[list[str]]=[],
         group: Optional[str]=None
     ) -> wandb.Run:
-    cfg_vars = {}
+    cfgs_vars = {}
     for cfg in configs:
-        cfg_vars |= vars(cfg)
+        cfg_vars = vars(cfg)
+        for k, v in cfg_vars.items(): # Should be recursive
+            if is_dataclass(v):
+                cfg_vars[k] = vars(v)
+        cfgs_vars |= cfg_vars
     return wandb.init(
         project="raidium-challenge",
-        config={**cfg_vars,},
+        config={**cfgs_vars,},
         tags=tags,
         group=group,
     )

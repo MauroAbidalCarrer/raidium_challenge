@@ -125,10 +125,11 @@ TRAIN_CONFIGS = {
         ]),
     ),
     "swin_pretraining": TrainingConfig(
-        n_epochs=200,
-        batch_size=32,
+        n_epochs=1000,
+        batch_size=64,
         transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
-        eval_interval=5,
+        eval_interval=10,
+        checkpointing_interval=50,
     )
 }
 
@@ -190,12 +191,14 @@ MODELS_CFGS: dict[str, ModelConfig] = {
                     image_size=256,
                     patch_size=4,
                     embed_dim=128,
-                    depths=[2, 2, 18, 2],
+                    depths=[2, 2, 2, 2],
                     num_heads=[4, 8, 16, 32],
                     window_size=6,
                     num_channels=1,
-                )
+                ),
+                "mask": {"mask_patch_size": 16, "mask_ratio": 0.75},
         },
-        #downscaling=2,
+        # downscaling=2,
+        compile=True,
     )
 }

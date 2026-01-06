@@ -11,36 +11,18 @@ from monai.networks.nets import UNet
 from einops.layers.torch import Rearrange
 from timm.models.layers import trunc_normal_
 from timm.models.vision_transformer import Block
-from transformers import (
-    CONFIG_MAPPING,
-    IMAGE_PROCESSOR_MAPPING,
-    MODEL_FOR_MASKED_IMAGE_MODELING_MAPPING,
-    AutoConfig,
-    AutoImageProcessor,
-    AutoModelForMaskedImageModeling,
-    HfArgumentParser,
-    Trainer,
-    TrainingArguments,
-)
+from transformers import SwinConfig
+from transformers import AutoModelForMaskedImageModeling as MiMModel
 
 import src.configs as cfg
 
 
-
-
 class MaskGenerator:
-    """
-    A class to generate boolean masks for the pretraining task.
-
-    A mask is a 1D tensor of shape (model_patch_size**2,) where the value is either 0 or 1,
-    where 1 indicates "masked".
-    """
-
-    def __init__(self, input_size=256, mask_patch_size=32, model_patch_size=4, mask_ratio=0.6):
-        self.input_size = input_size
-        self.mask_patch_size = mask_patch_size
-        self.model_patch_size = model_patch_size
-        self.mask_ratio = mask_ratio
+    def __init__(self, model_cfg: SwinConfig, mask_cfg: dict[str, Any]):
+        self.input_size = model_cfg.image_size
+        self.mask_patch_size = mask_cfg["mask_patch_size"]
+        self.model_patch_size = model_cfg.patch_size
+        self.mask_ratio = mask_cfg["mask_ratio"]
 
         if self.input_size % self.mask_patch_size != 0:
             raise ValueError("Input size must be divisible by mask patch size")
@@ -94,8 +76,6 @@ class HFMaskedImageModelWrapper(nn.Module):
         if "reconstructed_pixel_values" in outputs:
             outputs["x_hat"] = outputs["reconstructed_pixel_values"]
         return outputs
-
-
 
 def gather_batch(x: Tensor, idx: Tensor) -> Tensor:
     """
@@ -419,12 +399,10 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
         )
     elif model_cfg.architecture == "hf_swin_vit":
         mask_generator = MaskGenerator(
-            input_size=model_cfg.constructor_kwargs["config"].image_size,
-            mask_patch_size=32, # check in more details how this works
-            model_patch_size=model_cfg.constructor_kwargs["config"].patch_size,
-            mask_ratio=0.75,
+            model_cfg.constructor_kwargs["config"],
+            model_cfg.constructor_kwargs["mask"],
         )
-        model = AutoModelForMaskedImageModeling.from_config(**model_cfg.constructor_kwargs)
+        model = MiMModel.from_config(config=model_cfg.constructor_kwargs["config"])
         model = HFMaskedImageModelWrapper(model, mask_generator)
     if model_cfg.downscaling is not None:
         model = DownScalingWrapper(model, model_cfg.downscaling)

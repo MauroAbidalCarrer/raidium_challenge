@@ -19,6 +19,13 @@ from src.configs import (
 from src import configs as cfg
 
 
+def ssl_loss(forward_dict: dict[str, Any]) -> dict[str, Tensor]:
+    return {
+            "loss": forward_dict["loss"],
+            "rec_l1_loss": forward_dict["loss"],
+            "rec_l2_loss": forward_dict["loss"] ** 2,
+    }
+
 class SelfSupervisedLoss:
     """
     Computes a weighted average of mse loss of the images reconstruction, dice score and cross entropy.

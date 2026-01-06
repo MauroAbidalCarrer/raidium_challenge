@@ -57,8 +57,8 @@ class Trainer:
             self,
             data_loaders: dict[str, DataLoader],
             criterion: cfg.criterion_t,
-            chkpt_pth_format: str,
-        ) -> dict[str, Tensor]:
+            chkpt_pth_format: str | None,
+        ):
         warnings.filterwarnings(
             "ignore",
             message="RandomErasing.*tv_tensors.Mask",
@@ -76,7 +76,11 @@ class Trainer:
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
-            if (self.epoch % self.cfg.checkpointing_interval == 0 and self.epoch != 0) or is_last_epoch:
+            is_chkpt_epoch = self.epoch % self.cfg.checkpointing_interval == 0
+            is_chkpt_epoch = is_chkpt_epoch and self.epoch != 0
+            is_chkpt_epoch = is_chkpt_epoch or is_last_epoch
+            is_chkpt_epoch = is_chkpt_epoch and chkpt_pth_format is not None
+            if is_chkpt_epoch:
                 self.save_checkpoint(chkpt_pth_format)
 
     def save_checkpoint(self, chkpt_pth_format: str):

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from pytz import timezone
 from datetime import datetime
 from functools import partial
@@ -7,64 +8,57 @@ import optuna
 from optuna.trial import TrialState
 from sklearn.model_selection import train_test_split
 
-from src.models import mk_model_from_cfg
-from src.training import train_model
-from src.metrics import SegmentationLoss
-from src import dataset
-from src.dataset import load_preprocessed_dataset
-from src.configs import TrainingConfig, ModelConfig, DatasetConfig, OptimizerConfig
+import src.configs as cfg
+from src import dataset, models, training, metrics
 
 
 def main():
-    model_cfg = ModelConfig()
-    dataset_cfg = DatasetConfig()
-    train_cfg = TrainingConfig(n_epochs=75)
+    model_cfg = cfg.MODELS_CFGS["downscaled_swin_vit"]
+    base_train_cfg = cfg.TRAIN_CONFIGS["swin_pretraining"]
+    train_cfg = deepcopy(cfg.TRAIN_CONFIGS["swin_pretraining"])
 
-    dataset.mk_dataset(verbose=False)
-    x_train, y_train, x_test = load_preprocessed_dataset()
+    data_loaders = dataset.mk_ssl_loaders(base_train_cfg)
 
     france_date = datetime.now(timezone('Europe/Paris'))
-    hp_tuning_group = "start_lr+beta1_hp_" + france_date.strftime("%y-%m-%d:%H%M")
-    def objective(trial: optuna.trial.Trial, x_train, y_train) -> float:
-        train_cfg.optim_cfg = OptimizerConfig(
-            trial.suggest_float("starting_lr", low=1e-5, high=1e-2),
-            trial.suggest_float("beta0", low=0.85, high=0.99),
-            trial.suggest_float("beta1", low=0.9, high=0.999),
-        )
-        model = torch.compile(mk_model_from_cfg(train_cfg, model_cfg))
-        criterion = SegmentationLoss(train_cfg)
-        x_train, x_valid, y_train, y_valid = train_test_split(
-            x_train,
-            y_train,
-            test_size=dataset_cfg.test_size,
-            random_state=train_cfg.random_state,
-        )
-        train_loader, valid_loader = dataset.get_data_loaders(
-            x_train,
-            y_train,
-            x_valid,
-            y_valid,
-            train_cfg,
-        )
-        valid_dice_score = train_model(
-            model,
-            dataset_cfg,
-            train_cfg,
-            train_loader,
-            valid_loader,
-            criterion,
-            save_checkpoint=False,
-            print_time_to_run=False,
-            hp_tuning_group=hp_tuning_group,
-        )
-        print("starting_lr:", valid_dice_score)
-        return valid_dice_score
+    hp_tune_run_grp = "hp_tuning-start_lr+betas" + france_date.strftime("%y-%m-%d:%H%M")
 
-    study = optuna.create_study(direction="maximize")
+    def objective(trial: optuna.trial.Trial) -> float:
+        optim_cfg = deepcopy(cfg.OPTIM_CFGS["downscaled_vit_pretraining"])
+        optim_cfg.beta0 = trial.suggest_float("beta_0", 0.85, 0.99)
+        optim_cfg.beta1 = trial.suggest_float("beta_1", 0.85, 0.99)
+        optim_cfg.start_lr = trial.suggest_float("start_lr", 5e-5, 1e-3)
+        
+        wandb_run = training.wandb_init(
+            model_cfg,
+            train_cfg,
+            optim_cfg,
+            tags=cfg.WANDB_RUN_TAGS["downscaled_swin_pretraining"],
+            group=hp_tune_run_grp,
+        )
+        model = models.mk_model_from_cfg(model_cfg)
+        optim = training.mk_optimizer(model, optim_cfg)
+        lr_scheduler = training.mk_lr_scheduler(train_cfg, optim)
+        trainer = training.Trainer(
+            model,
+            train_cfg,
+            optim,
+            lr_scheduler,
+            wandb_run
+        )
+        trainer.train_model(
+            data_loaders,
+            metrics.ssl_loss,
+            chkpt_pth_format=None,
+        )
+        min_val_loss = min(wandb_run.scan_history(keys=["validation/rec_l2_loss"]))
+        return min_val_loss
+
+    study = optuna.create_study(direction="minimize")
     study.optimize(
-        partial(objective, x_train=x_train, y_train=y_train),
+        objective,
         n_trials=100,
         timeout=60 * 60 * 8,
+        n_jobs=2,
     )
     complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 

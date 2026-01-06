@@ -60,8 +60,9 @@ class MIMWrapper(MiMModel):
             embed_dim: int,
             mask_ratio: int,
             mask_patch_size: int,
-            down_scaling_factor: int = 1,
+            down_scaling_factor: Optional[int] = None,
         ):
+        down_scaling_factor = down_scaling_factor or 1
         img_size=256 // down_scaling_factor
         swin_cfg = SwinConfig(
             image_size=img_size,
@@ -92,8 +93,8 @@ class MIMWrapper(MiMModel):
             bool_masked_pos=bool_masked_pos,
         )
         outputs = vars(outputs)
-        if "reconstructed_pixel_values" in outputs:
-            outputs["x_hat"] = outputs["reconstructed_pixel_values"]
+        if "reconstruction" in outputs:
+            outputs["x_hat"] = outputs["reconstruction"]
         return outputs
 
 def gather_batch(x: Tensor, idx: Tensor) -> Tensor:
@@ -375,16 +376,19 @@ class MAE_ViT(nn.Module):
 
 class DownScalingWrapper(nn.Module):
 
-    def __init__(self, model: nn.Module, downscaling: int = 2):
+    def __init__(self, model: nn.Module, downscaling: int = 2, up_scale_output: bool=True):
         super().__init__()
         self.downscaling = downscaling
         self.model = model
+        self.up_scale_output = up_scale_output
 
     def forward(self, batch_dict: dict[str, Any]) -> dict[str, Tensor]:
         batch_dict = {
             "x": F.max_pool2d(batch_dict["x"], self.downscaling, self.downscaling),
         }
         output_dict = self.model(batch_dict)
+        if not self.up_scale_output:
+            return output_dict
         for output_k in ("x_hat", "mask", "y_pred"):
             if output_k in output_dict:
                 output_dict[output_k] = F.interpolate(
@@ -419,7 +423,7 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
     elif model_cfg.architecture == "hf_swin_vit":
         model = MIMWrapper(down_scaling_factor=model_cfg.downscaling, **model_cfg.constructor_kwargs)
     if model_cfg.downscaling is not None:
-        model = DownScalingWrapper(model, model_cfg.downscaling)
+        model = DownScalingWrapper(model, model_cfg.downscaling, model_cfg.up_scale_output)
     if model_cfg.compile:
         model = torch.compile(model)
     model.cfg = model_cfg

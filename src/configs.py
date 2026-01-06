@@ -125,7 +125,7 @@ TRAIN_CONFIGS = {
         ]),
     ),
     "swin_pretraining": TrainingConfig(
-        n_epochs=1000,
+        n_epochs=1,
         batch_size=32,
         transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
         eval_interval=10,
@@ -168,6 +168,7 @@ class ModelConfig:
     compile: bool = False
     constructor_kwargs: dict = field(default_factory=dict)
     downscaling: Optional[int] = None
+    up_scale_output: bool = False
 
 MODELS_CFGS: dict[str, ModelConfig] = {
     "downscaled_vit": ModelConfig(
@@ -189,15 +190,13 @@ MODELS_CFGS: dict[str, ModelConfig] = {
         constructor_kwargs={
             "patch_size": 4,
             "embed_dim": 128,
-            # "depths": [2, 2, 2, 2],
-            # "num_heads": [4, 8, 16, 32],
             "n_layers": 4,
             "per_layer_depth": 2,
-            # "num_chanels": 1,
             "mask_patch_size": 16,
             "mask_ratio": 0.75
         },
-        downscaling=2,
-        compile=True,
+        # downscaling=2,
+        up_scale_output=False,
+        compile=False,
     )
 }

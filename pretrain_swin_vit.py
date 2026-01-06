@@ -29,27 +29,21 @@ from src import configs as cfg
 from src import dataset, training, models, metrics
 
 
-def ssl_loss(forward_dict: dict[str, Any]) -> dict[str, Tensor]:
-    return {
-            "loss": forward_dict["loss"],
-            "rec_l1_loss": forward_dict["loss"],
-            "rec_l2_loss": forward_dict["loss"] ** 2,
-    }
-
 def main():
     model_cfg = cfg.MODELS_CFGS["downscaled_swin_vit"]
+    optim_cfg = cfg.OPTIM_CFGS["downscaled_vit_pretraining"]
+    train_cfg = cfg.TRAIN_CONFIGS["swin_pretraining"]
+
     model = models.mk_model_from_cfg(model_cfg)
     model.cfg = model_cfg
-
-    optim = training.mk_optimizer(model, cfg.OPTIM_CFGS["downscaled_vit_pretraining"])
+    optim = training.mk_optimizer(model, optim_cfg)
     lr_scheduler = training.mk_lr_scheduler(cfg.TRAIN_CONFIGS["swin_pretraining"], optim)
-
-    train_cfg = cfg.TRAIN_CONFIGS["swin_pretraining"]
     data_loaders = dataset.mk_ssl_loaders(train_cfg)
 
     wandb_run = training.wandb_init(
         model_cfg,
         train_cfg,
+        optim_cfg,
         tags=cfg.WANDB_RUN_TAGS["downscaled_swin_pretraining"],
         group="manual_training",
     )
@@ -63,7 +57,7 @@ def main():
     )
     trainer.train_model(
         data_loaders,
-        ssl_loss,
+        metrics.ssl_loss,
         "checkpoints/swin_MiM/{wandb_run_name}/swin_ssl_epoch_{epoch}.pt",
     )
 

@@ -34,12 +34,13 @@ def main():
     optim_cfg = cfg.OPTIM_CFGS["downscaled_vit_pretraining"]
     train_cfg = cfg.TRAIN_CONFIGS["swin_pretraining"]
 
+    print("Creating objects")
     model = models.mk_model_from_cfg(model_cfg)
     model.cfg = model_cfg
     optim = training.mk_optimizer(model, optim_cfg)
     lr_scheduler = training.mk_lr_scheduler(cfg.TRAIN_CONFIGS["swin_pretraining"], optim)
     data_loaders = dataset.mk_ssl_loaders(train_cfg)
-
+    print("Creating wandb")
     wandb_run = training.wandb_init(
         model_cfg,
         train_cfg,
@@ -48,6 +49,7 @@ def main():
         group="manual_training",
     )
 
+    print("Creating trainer")
     trainer = training.Trainer(
         model,
         cfg.TRAIN_CONFIGS["swin_pretraining"],
@@ -55,6 +57,7 @@ def main():
         lr_scheduler,
         wandb_run,
     )
+    print("Started training")
     trainer.train_model(
         data_loaders,
         metrics.ssl_loss,

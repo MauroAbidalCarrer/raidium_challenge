@@ -31,7 +31,7 @@ from src import dataset, training, models, metrics
 
 def main():
     model_cfg = cfg.MODELS_CFGS["downscaled_swin_vit"]
-    optim_cfg = cfg.OPTIM_CFGS["downscaled_vit_pretraining"]
+    optim_cfg = cfg.OPTIM_CFGS["downscaled_swin_vit_pretraining"]
     train_cfg = cfg.TRAIN_CONFIGS["swin_pretraining"]
 
     print("Creating objects")

@@ -30,7 +30,7 @@ def main():
     print("Starting hp tuning group", hp_tune_run_grp)
 
     def objective(trial: optuna.trial.Trial) -> float:
-        optim_cfg = deepcopy(cfg.OPTIM_CFGS["downscaled_vit_pretraining"])
+        optim_cfg = deepcopy(cfg.OPTIM_CFGS["downscaled_swin_vit_pretraining"])
         optim_cfg.beta0 = trial.suggest_float("beta_0", 0.85, 0.9999)
         optim_cfg.beta1 = trial.suggest_float("beta_1", 0.85, 0.9999)
         optim_cfg.start_lr = trial.suggest_float("start_lr", 5e-5, 1e-3)

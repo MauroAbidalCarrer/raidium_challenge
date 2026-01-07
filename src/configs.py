@@ -5,7 +5,6 @@ from typing import (
     Tuple,
     Dict,
 )
-from transformers import SwinConfig
 from dataclasses import dataclass, field
 
 import torch
@@ -51,53 +50,6 @@ class TrainingConfig:
     eval_interval: int = 50
 
 TRAIN_CONFIGS = {
-    "pretraining": TrainingConfig(
-        # max_lr=1e-3,
-        n_warmup_epochs=50,
-        batch_size=64,
-        n_epochs=5000,
-        transform=v2.RandomAffine(
-            degrees=(-20, 20),
-            translate=(0.1, 0.3),
-            scale=(0.75, 2),
-        )
-    ),
-    "downscaled_pretraining": TrainingConfig(
-        batch_size=32,
-        n_epochs=5000,
-        transform=v2.Compose([
-            v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
-            v2.RandomAffine(
-                degrees=(-10, 10),
-                translate=(0.1, 0.3),
-                scale=(0.75, 2),
-            ),
-        ]),
-    ),
-    "finetuning": TrainingConfig(
-        batch_size=64,
-        n_epochs=2000,
-        dice_loss_weight = 2,
-        cross_entropy_loss_weight= 1,
-        sampling = "uniform",
-        use_cls_weights_for_dice = False,
-        include_backgroud = True,
-        dice_loss="monai",
-        max_loss_norm = 2,
-        transform=v2.Compose([
-            v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
-            v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
-            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
-            v2.RandomErasing(p=0.2, scale=(0.05, 0.1), value="random"),
-            v2.RandomErasing(p=0.2, scale=(0.05, 0.1), value="random"),
-            v2.RandomErasing(p=0.2, scale=(0.05, 0.1), value="random"),
-            v2.RandomErasing(p=0.2, scale=(0.05, 0.1), value="random"),
-            v2.RandomErasing(p=0.2, scale=(0.05, 0.1), value="random"),
-            v2.RandomErasing(p=0.2, scale=(0.05, 0.1), value="random"),
-            v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
-        ]),
-    ),
     "unet_training": TrainingConfig(
         batch_size=32,
         n_epochs=600,
@@ -132,7 +84,7 @@ TRAIN_CONFIGS = {
 
 OPTIM_CFGS = {
     "unet": OptimizationConfig(starting_lr=5e-4),
-    "downscaled_vit_pretraining": OptimizationConfig(
+    "downscaled_swin_vit_pretraining": OptimizationConfig(
         # Lowest validation loss last hp tuning
         **{'beta0': 0.8751419558211533, 'beta1': 0.926601537931387, 'starting_lr': 0.0003003025846093607} 
     ),
@@ -141,12 +93,6 @@ OPTIM_CFGS = {
 
 WANDB_RUN_TAGS = {
     "unet": ["segmentation", "unet"],
-    "downscaled_pretraining": [
-        "pretraining",
-        "downscaled",
-        "mae_vit",
-        "ssl"
-    ],
     "downscaled_swin_pretraining": [
         "pretraining",
         "downscaled",
@@ -154,12 +100,6 @@ WANDB_RUN_TAGS = {
         "MiM"
         "ssl"
     ],
-    "finetuning": [
-        "finetuning",
-        "downscaled",
-        "mae_vit",
-        "segmentation"
-    ]
 }
 
 @dataclass
@@ -171,11 +111,6 @@ class ModelConfig:
     up_scale_output: bool = False
 
 MODELS_CFGS: dict[str, ModelConfig] = {
-    "downscaled_vit": ModelConfig(
-        architecture="mae_vit",
-        constructor_kwargs={"patch_size": 8},
-        downscaling=2,
-    ),
     "unet": ModelConfig(
         architecture="unet",
         constructor_kwargs={

@@ -288,7 +288,7 @@ def wandb_init(
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:
     return ConstantLR(optimizer, factor=1)
 
-def mk_optimizer(model: nn.Module, optimizer_cfg: cfg.OptimizerConfig) -> Optimizer:
+def mk_optimizer(model: nn.Module, optimizer_cfg: cfg.OptimizationConfig) -> Optimizer:
     optim = torch.optim.AdamW(
         model.parameters(),
         # TODO: Understand the scaling of the max_lr

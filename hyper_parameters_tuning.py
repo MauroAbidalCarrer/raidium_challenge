@@ -1,3 +1,4 @@
+import os 
 from copy import deepcopy
 from pytz import timezone
 from datetime import datetime
@@ -15,9 +16,11 @@ from src import dataset, models, training, metrics
 
 
 def main():
+    os.environ["WANDB_SILENT"] = "true"
     model_cfg = cfg.MODELS_CFGS["downscaled_swin_vit"]
     base_train_cfg = cfg.TRAIN_CONFIGS["swin_pretraining"]
     train_cfg = deepcopy(cfg.TRAIN_CONFIGS["swin_pretraining"])
+    train_cfg.n_epochs = 50
 
     data_loaders = dataset.mk_ssl_loaders(base_train_cfg)
 
@@ -47,14 +50,15 @@ def main():
             lr_scheduler,
             wandb_run
         )
-        trainer.train_model(
+        records = trainer.train_model(
             data_loaders,
             metrics.ssl_loss,
             chkpt_pth_format=None,
         )
-        api = wandb.Api()
-        api_run = api.run(f"{wandb_run.entity}/{wandb_run.project}/{wandb_run.id}")
-        min_val_loss = min(api_run.scan_history(keys=["validation/rec_l2_loss"]))
+        records = pd.DataFrame.from_records(records)
+        min_val_loss = records["validation/rec_l2_loss"].min()
+        print("min_val_loss:", min_val_loss)
+
         return min_val_loss
 
     study = optuna.create_study(direction="minimize")

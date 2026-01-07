@@ -45,7 +45,7 @@ def main():
 
         
         wandb_run = training.wandb_init(
-            base_model_cfg,
+            model_cfg,
             train_cfg,
             optim_cfg,
             tags=cfg.WANDB_RUN_TAGS["downscaled_swin_pretraining"],

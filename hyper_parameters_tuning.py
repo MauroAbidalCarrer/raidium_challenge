@@ -27,11 +27,12 @@ def main():
 
     france_date = datetime.now(timezone('Europe/Paris'))
     hp_tune_run_grp = "hp_tuning-start_lr+betas" + france_date.strftime("%y-%m-%d:%H%M")
+    print("Starting hp tuning group", hp_tune_run_grp)
 
     def objective(trial: optuna.trial.Trial) -> float:
         optim_cfg = deepcopy(cfg.OPTIM_CFGS["downscaled_vit_pretraining"])
-        optim_cfg.beta0 = trial.suggest_float("beta_0", 0.85, 0.99)
-        optim_cfg.beta1 = trial.suggest_float("beta_1", 0.85, 0.99)
+        optim_cfg.beta0 = trial.suggest_float("beta_0", 0.85, 0.9999)
+        optim_cfg.beta1 = trial.suggest_float("beta_1", 0.85, 0.9999)
         optim_cfg.start_lr = trial.suggest_float("start_lr", 5e-5, 1e-3)
         train_cfg = deepcopy(base_train_cfg)
         train_cfg.max_loss_norm = trial.suggest_float("max_loss_norm", 0.1, 4)

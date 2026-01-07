@@ -4,7 +4,9 @@ from datetime import datetime
 from functools import partial
 
 import torch
+import wandb
 import optuna
+import pandas as pd
 from optuna.trial import TrialState
 from sklearn.model_selection import train_test_split
 
@@ -50,7 +52,9 @@ def main():
             metrics.ssl_loss,
             chkpt_pth_format=None,
         )
-        min_val_loss = min(wandb_run.scan_history(keys=["validation/rec_l2_loss"]))
+        api = wandb.Api()
+        api_run = api.run(f"{wandb_run.entity}/{wandb_run.project}/{wandb_run.id}")
+        min_val_loss = min(api_run.scan_history(keys=["validation/rec_l2_loss"]))
         return min_val_loss
 
     study = optuna.create_study(direction="minimize")
@@ -71,6 +75,11 @@ def main():
     print("  Params: ")
     for key, value in current_trial.params.items():
         print("    {}: {}".format(key, value))
+
+def run_to_df(run: wandb.sdk.wandb_run.Run) -> pd.DataFrame:
+    api = wandb.Api()
+    api_run = api.run(f"{run.entity}/{run.project}/{run.id}")
+    return pd.DataFrame(api_run.scan_history())
 
 if __name__ == "__main__":
     main()

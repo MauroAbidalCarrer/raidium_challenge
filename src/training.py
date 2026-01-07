@@ -283,6 +283,7 @@ def wandb_init(
         config={**cfgs_vars,},
         tags=tags,
         group=group,
+        reinit=True,
     )
 
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:

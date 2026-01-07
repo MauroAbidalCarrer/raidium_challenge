@@ -52,13 +52,14 @@ class Trainer:
             metric_name=cfg.CONFUSE_MAT_METRICS_NAMES,
             reduction="mean_batch",
         )
+        self.records: list[dict[str, Any]] = []
 
     def train_model(
             self,
             data_loaders: dict[str, DataLoader],
             criterion: cfg.criterion_t,
-            chkpt_pth_format: str,
-        ) -> dict[str, Tensor]:
+            chkpt_pth_format: str | None,
+        ) -> list[dict[str, Any]]:
         warnings.filterwarnings(
             "ignore",
             message="RandomErasing.*tv_tensors.Mask",
@@ -76,8 +77,13 @@ class Trainer:
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
-            if (self.epoch % self.cfg.checkpointing_interval == 0 and self.epoch != 0) or is_last_epoch:
+            is_chkpt_epoch = self.epoch % self.cfg.checkpointing_interval == 0
+            is_chkpt_epoch = is_chkpt_epoch and self.epoch != 0
+            is_chkpt_epoch = is_chkpt_epoch or is_last_epoch
+            is_chkpt_epoch = is_chkpt_epoch and chkpt_pth_format is not None
+            if is_chkpt_epoch:
                 self.save_checkpoint(chkpt_pth_format)
+        return self.records
 
     def save_checkpoint(self, chkpt_pth_format: str):
         chkpt_dict = {
@@ -140,10 +146,6 @@ class Trainer:
             criterion: cfg.criterion_t,
         ) -> dict[str, Tensor]:
         if self.cfg.transform:
-#            batch_dict["x"], batch_dict["y_true"] = self.cfg.transform(
-#                batch_dict["x"],
-#                batch_dict["y_true"],
-#            )
             batch_dict = self.cfg.transform(batch_dict)
         self.optimizer.zero_grad()
         with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
@@ -260,6 +262,7 @@ class Trainer:
             data=data_with_prefix | trainer_data,
             step=self.step,
         )
+        self.records.append(data_with_prefix | trainer_data)
 
 
 def wandb_init(
@@ -284,7 +287,7 @@ def wandb_init(
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:
     return ConstantLR(optimizer, factor=1)
 
-def mk_optimizer(model: nn.Module, optimizer_cfg: cfg.OptimizerConfig) -> Optimizer:
+def mk_optimizer(model: nn.Module, optimizer_cfg: cfg.OptimizationConfig) -> Optimizer:
     optim = torch.optim.AdamW(
         model.parameters(),
         # TODO: Understand the scaling of the max_lr

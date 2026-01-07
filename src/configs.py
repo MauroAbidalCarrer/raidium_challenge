@@ -25,7 +25,7 @@ X_STD: float = 35.2164
 
 
 @dataclass
-class OptimizerConfig:
+class OptimizationConfig:
     starting_lr: float = 5e-4
     beta0: float = 0.9
     beta1: float = 0.999
@@ -39,9 +39,7 @@ class TrainingConfig:
     cross_entropy_loss_weight: float = 1
     dice_loss_weight: float = 2
     rec_loss_weight: float = 1
-    mask_ratio: float = 0.75
     random_state: int = 0
-    max_lr: float=1e-3
     n_warmup_epochs: int = 50
     transform: v2.Transform = v2.Identity()
     use_cls_weights_for_dice: bool = False
@@ -81,7 +79,6 @@ TRAIN_CONFIGS = {
         n_epochs=2000,
         dice_loss_weight = 2,
         cross_entropy_loss_weight= 1,
-        mask_ratio = 0,
         sampling = "uniform",
         use_cls_weights_for_dice = False,
         include_backgroud = True,
@@ -106,7 +103,6 @@ TRAIN_CONFIGS = {
         n_epochs=600,
         dice_loss_weight = 2,
         cross_entropy_loss_weight= 1,
-        mask_ratio = 0,
         sampling = "weighted",
         dice_loss = "custom",
         checkpointing_interval = 2,
@@ -125,18 +121,22 @@ TRAIN_CONFIGS = {
         ]),
     ),
     "swin_pretraining": TrainingConfig(
-        n_epochs=1000,
-        batch_size=64,
+        n_epochs=2000,
+        batch_size=32,
         transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
         eval_interval=10,
         checkpointing_interval=50,
+        max_loss_norm=3.259898655506028, 
     )
 }
 
 OPTIM_CFGS = {
-    "unet": OptimizerConfig(starting_lr=5e-4),
-    "downscaled_vit_pretraining": OptimizerConfig(starting_lr=2e-4),
-    "finetuning": OptimizerConfig(starting_lr=5e-4),
+    "unet": OptimizationConfig(starting_lr=5e-4),
+    "downscaled_vit_pretraining": OptimizationConfig(
+        # Lowest validation loss last hp tuning
+        **{'beta0': 0.8751419558211533, 'beta1': 0.926601537931387, 'starting_lr': 0.0003003025846093607} 
+    ),
+    "finetuning": OptimizationConfig(starting_lr=5e-4),
 }
 
 WANDB_RUN_TAGS = {
@@ -168,6 +168,7 @@ class ModelConfig:
     compile: bool = False
     constructor_kwargs: dict = field(default_factory=dict)
     downscaling: Optional[int] = None
+    up_scale_output: bool = False
 
 MODELS_CFGS: dict[str, ModelConfig] = {
     "downscaled_vit": ModelConfig(
@@ -187,18 +188,16 @@ MODELS_CFGS: dict[str, ModelConfig] = {
     "downscaled_swin_vit": ModelConfig(
         architecture="hf_swin_vit",
         constructor_kwargs={
-                "config": SwinConfig(
-                    image_size=256,
-                    patch_size=4,
-                    embed_dim=128,
-                    depths=[2, 2, 2, 2],
-                    num_heads=[4, 8, 16, 32],
-                    window_size=6,
-                    num_channels=1,
-                ),
-                "mask": {"mask_patch_size": 16, "mask_ratio": 0.75},
+            # Lowest val loss from last hp run
+            "patch_size": 4,
+            "embed_dim": 128,
+            "n_layers": 4,
+            "per_layer_depth": 2,
+            "mask_patch_size": 8,
+            "mask_ratio": 0.75
         },
-        # downscaling=2,
-        compile=True,
+        downscaling=2,
+        up_scale_output=False,
+        compile=False,
     )
 }

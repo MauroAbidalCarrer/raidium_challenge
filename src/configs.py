@@ -189,7 +189,10 @@ MODELS_CFGS: dict[str, ModelConfig] = {
         architecture="hf_swin_vit",
         constructor_kwargs={
             # Lowest val loss from last hp run
-            'embed_dim': 256, 'per_layer_depth': 3, 'n_layers': 8, 'patch_size': 6,
+            "patch_size": 4,
+            "embed_dim": 128,
+            "n_layers": 4,
+            "per_layer_depth": 2,
             "mask_patch_size": 8,
             "mask_ratio": 0.75
         },

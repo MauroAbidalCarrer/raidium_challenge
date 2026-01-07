@@ -121,17 +121,21 @@ TRAIN_CONFIGS = {
         ]),
     ),
     "swin_pretraining": TrainingConfig(
-        n_epochs=200,
+        n_epochs=2000,
         batch_size=32,
         transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
         eval_interval=10,
         checkpointing_interval=50,
+        max_loss_norm=3.259898655506028, 
     )
 }
 
 OPTIM_CFGS = {
     "unet": OptimizationConfig(starting_lr=5e-4),
-    "downscaled_vit_pretraining": OptimizationConfig(starting_lr=2e-4),
+    "downscaled_vit_pretraining": OptimizationConfig(
+        # Lowest validation loss last hp tuning
+        **{'beta0': 0.8751419558211533, 'beta1': 0.926601537931387, 'starting_lr': 0.0003003025846093607} 
+    ),
     "finetuning": OptimizationConfig(starting_lr=5e-4),
 }
 
@@ -184,10 +188,8 @@ MODELS_CFGS: dict[str, ModelConfig] = {
     "downscaled_swin_vit": ModelConfig(
         architecture="hf_swin_vit",
         constructor_kwargs={
-            "patch_size": 4,
-            "embed_dim": 128,
-            "n_layers": 4,
-            "per_layer_depth": 2,
+            # Lowest val loss from last hp run
+            'embed_dim': 256, 'per_layer_depth': 3, 'n_layers': 8, 'patch_size': 6,
             "mask_patch_size": 8,
             "mask_ratio": 0.75
         },

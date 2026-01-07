@@ -12,7 +12,7 @@ def main():
     install_rich_traceback(width=300, extra_lines=1)
     if len(sys.argv) > 1:
         chkpt = torch.load(sys.argv[1], weights_only=False)
-        optim_cfg = cfg.OPTIM_CFGS["downscaled_vit_pretraining"]
+        optim_cfg = cfg.OPTIM_CFGS["downscaled_swin_vit_pretraining"]
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
         model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
         model = models.mk_model_from_cfg(model_cfg)
@@ -21,7 +21,7 @@ def main():
         optimizer.load_state_dict(chkpt["optimizer"])
     else:
         model_cfg  = cfg.MODELS_CFGS["downscaled_vit"]
-        optim_cfg = cfg.OPTIM_CFGS["downscaled_vit_pretraining"]
+        optim_cfg = cfg.OPTIM_CFGS["downscaled_swin_vit_pretraining"]
         train_cfg  = cfg.TRAIN_CONFIGS["downscaled_pretraining"]
         model = models.mk_model_from_cfg(model_cfg)
         optimizer  = training.mk_optimizer(model, optim_cfg)

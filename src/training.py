@@ -52,13 +52,14 @@ class Trainer:
             metric_name=cfg.CONFUSE_MAT_METRICS_NAMES,
             reduction="mean_batch",
         )
+        self.records: list[dict[str, Any]] = []
 
     def train_model(
             self,
             data_loaders: dict[str, DataLoader],
             criterion: cfg.criterion_t,
             chkpt_pth_format: str | None,
-        ):
+        ) -> list[dict[str, Any]]:
         warnings.filterwarnings(
             "ignore",
             message="RandomErasing.*tv_tensors.Mask",
@@ -82,6 +83,7 @@ class Trainer:
             is_chkpt_epoch = is_chkpt_epoch and chkpt_pth_format is not None
             if is_chkpt_epoch:
                 self.save_checkpoint(chkpt_pth_format)
+        return self.records
 
     def save_checkpoint(self, chkpt_pth_format: str):
         chkpt_dict = {
@@ -144,10 +146,6 @@ class Trainer:
             criterion: cfg.criterion_t,
         ) -> dict[str, Tensor]:
         if self.cfg.transform:
-#            batch_dict["x"], batch_dict["y_true"] = self.cfg.transform(
-#                batch_dict["x"],
-#                batch_dict["y_true"],
-#            )
             batch_dict = self.cfg.transform(batch_dict)
         self.optimizer.zero_grad()
         with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
@@ -264,6 +262,7 @@ class Trainer:
             data=data_with_prefix | trainer_data,
             step=self.step,
         )
+        self.records.append(data_with_prefix | trainer_data)
 
 
 def wandb_init(

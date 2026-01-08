@@ -5,12 +5,8 @@ from typing import Tuple, Optional, Any
 import torch
 import numpy as np
 from torch import Tensor, nn
-from einops import rearrange
 from torch.nn import functional as F
 from monai.networks.nets import UNet
-from einops.layers.torch import Rearrange
-from timm.models.layers import trunc_normal_
-from timm.models.vision_transformer import Block
 from transformers import SwinConfig
 from transformers import SwinForMaskedImageModeling as MiMModel
 

@@ -81,12 +81,12 @@ def main():
     backbone = SwinModel.from_pretrained(
         "hf_swin_pretrained",
         add_pooling_layer=False,
-    )
+    ).to(cfg.DEVICE)
     backbone = backbone.train()
     for param in backbone.parameters():
         param.requires_grad_(False)
-    model = SwinSegmentationModel(backbone)
-    model = models.DownScalingWrapper(model)
+    model = SwinSegmentationModel(backbone).to(cfg.DEVICE)
+    model = models.DownScalingWrapper(model).to(cfg.DEVICE)
     optim = training.mk_optimizer(model, optim_cfg)
     lr_scheduler = training.mk_lr_scheduler(train_cfg, optim)
     wandb_run = training.wandb_init(optim_cfg, train_cfg, tags=wandb_tags)

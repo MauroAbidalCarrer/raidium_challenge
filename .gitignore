@@ -1,3 +1,4 @@
+hf_swin_pretrained/*
 *.npy
 *.pt
 nohup*

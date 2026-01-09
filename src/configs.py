@@ -100,6 +100,12 @@ WANDB_RUN_TAGS = {
         "MiM"
         "ssl"
     ],
+    "donwscaled_swin_finetuning": [
+        "segmentation",
+        "finetuning",
+        "downscaled",
+        "swin_vit",
+    ]
 }
 
 @dataclass

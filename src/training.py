@@ -24,6 +24,7 @@ from src import (
     metrics,
     timing,
     utils,
+    models,
 )
 from src import configs as cfg
 
@@ -252,10 +253,14 @@ class Trainer:
             os.makedirs(dir_path, exist_ok=True)
         # Save checkpoint
         torch.save(chkpt_dict, pth)
-        if issubclass(type(self.model), PreTrainedModel):
-            pretrained_pth = chkpt_pth_format[:-3]
-            self.model.save_pretrained(pretrained_pth) # remove .pt
-            print("Saved checkpoint to", pth, " and as pretrained model at", pretrained_pth)
+        # Very ugly code below...
+        model = self.model
+        if isinstance(model, models.DownScalingWrapper):
+            model = model.model
+        if issubclass(type(model), PreTrainedModel):
+            pretrained_pth = pth[:-3]
+            model.save_pretrained(pretrained_pth) # remove .pt
+            print("Saved checkpoint to", pth, "and as pretrained model at", pretrained_pth)
         else:
             print("Saved checkpoint to", pth)
 

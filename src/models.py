@@ -95,7 +95,6 @@ class MIMWrapper(MiMModel):
 
 
 class DownScalingWrapper(nn.Module):
-
     def __init__(self, model: nn.Module, downscaling: int = 2, up_scale_output: bool=True):
         super().__init__()
         self.downscaling = downscaling

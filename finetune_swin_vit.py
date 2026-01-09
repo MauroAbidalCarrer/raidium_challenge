@@ -9,7 +9,7 @@ from src import models, training, dataset, metrics
 
 
 class SwinSegmentationModel(nn.Module):
-    def __init__(self, backbone: SwinModel, backbone_cfg: cfg.ModelConfig, decoder_dim=256):
+    def __init__(self, backbone: SwinModel, decoder_dim=256, mask_ratio: float=0):
         super().__init__()
         self.backbone = backbone
         embed_dim = backbone.config.embed_dim * 2
@@ -20,6 +20,9 @@ class SwinSegmentationModel(nn.Module):
             embed_dim * 4,
         ]
 
+        self.mask_ratio = mask_ratio
+        if self.mask_ratio:
+            self.mask_generator = models.MaskGenerator(128, backbone.config.patch_size, mask_ratio, 8)
 
         self.proj = nn.ModuleList([
             nn.Conv2d(dim, decoder_dim, kernel_size=1)
@@ -35,10 +38,20 @@ class SwinSegmentationModel(nn.Module):
         self.head = nn.Conv2d(decoder_dim, cfg.N_CLASSES, kernel_size=1)
 
     def forward(self, batch: dict[str, Tensor]) -> dict[str, Tensor]:
+        pixel_values = batch["x"]
+        if self.mask_generator:
+            bool_masked_pos = torch.stack(
+                [self.mask_generator() for _ in range(pixel_values.shape[0])],
+                dim=0,
+            ).to(pixel_values.device)
+        else:
+            bool_masked_pos = None
+        print("pixe values", pixel_values.shape, "bool mask", bool_masked_pos.shape)
         outputs = self.backbone(
-            batch["x"],
+            pixel_values,
             output_hidden_states=True,
             return_dict=True,
+            bool_masked_pos=bool_masked_pos,
         )
 
         hidden_states = outputs.hidden_states[1:]  # 4 stages
@@ -54,7 +67,7 @@ class SwinSegmentationModel(nn.Module):
             if i > 0:
                 x = F.interpolate(
                     x,
-                    scale_factor=2 ** min(i, 2),
+                    (16, 16),
                     mode="bilinear",
                     align_corners=False,
                 )
@@ -87,7 +100,7 @@ def main():
     backbone = backbone.train()
     for param in backbone.parameters():
         param.requires_grad_(False)
-    model = SwinSegmentationModel(backbone, cfg.MODELS_CFGS["downscaled_swin_vit"]).to(cfg.DEVICE)
+    model = SwinSegmentationModel(backbone, mask_ratio=0.3).to(cfg.DEVICE)
     model = models.DownScalingWrapper(model).to(cfg.DEVICE)
     model.cfg = cfg.ModelConfig(
         "swin_fpn_segmentation",

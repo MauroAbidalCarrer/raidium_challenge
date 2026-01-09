@@ -14,6 +14,7 @@ from monai import metrics as monai_metrics
 from rich.progress import track
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
+from transformers import PreTrainedModel
 from torch.optim.lr_scheduler import (
     LRScheduler,
     ConstantLR
@@ -60,6 +61,8 @@ class Trainer:
             criterion: cfg.criterion_t,
             chkpt_pth_format: str | None,
         ) -> list[dict[str, Any]]:
+        self.save_checkpoint(chkpt_pth_format)
+        exit(0)
         warnings.filterwarnings(
             "ignore",
             message="RandomErasing.*tv_tensors.Mask",
@@ -84,37 +87,6 @@ class Trainer:
             if is_chkpt_epoch:
                 self.save_checkpoint(chkpt_pth_format)
         return self.records
-
-    def save_checkpoint(self, chkpt_pth_format: str):
-        chkpt_dict = {
-            "model": self.model.state_dict(),
-            "model_cfg": vars(self.model.cfg),
-            "train_cfg": vars(self.cfg),
-            "optimizer": self.optimizer.state_dict(),
-            "lr_scheduler": self.lr_scheduler.state_dict(),
-            "lr_scheduler_cfg": getattr(self.lr_scheduler, "cfg", None),
-            "optimizer_cfg": getattr(self.optimizer.state_dict(), "cfg", None),
-            "step": self.step,
-            "epoch": self.epoch,
-            "training_samples_seen": self.training_samples_seen,
-        }
-        pth = chkpt_pth_format.format(epoch=self.epoch, wandb_run_name=self.wandb_run.name)
-        dir_path = os.path.dirname(pth)
-        if dir_path:  # handle case where pth has no directory component
-            os.makedirs(dir_path, exist_ok=True)
-        # Save checkpoint
-        torch.save(chkpt_dict, pth)
-        # create wandb artifact
-        artifact_name = f"checkpoint-epoch-{self.epoch}"
-        artifact = wandb.Artifact(
-            name=artifact_name,
-            type="model",
-        )
-        # add file to artifact
-        artifact.add_file(pth)
-        # log artifact to run
-        self.wandb_run.log_artifact(artifact, artifact_name)
-        print("Uploaded checkpoint as artifact", artifact_name, "and to", pth)
 
     def train_model_for_single_epoch(
             self,
@@ -185,12 +157,7 @@ class Trainer:
         """
         self.model = self.model.eval()
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
-        # valid_infer_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
-        # with torch.inference_mode():
-        #     test_infer_dict  = self.evaluate_model_on_single_split(data_loaders["test"],  criterion)
         self.wandb_log_dict_with_prefix(valid_eval_dict, "validation")
-        # self.wandb_log_dict_with_prefix(test_infer_dict,  "inference_on_test")
-        # self.wandb_log_dict_with_prefix(valid_infer_dict, "inference_on_valid")
 
     @torch.no_grad
     def evaluate_model_on_single_split(
@@ -268,6 +235,32 @@ class Trainer:
             step=self.step,
         )
         self.records.append(data_with_prefix | trainer_data)
+
+    def save_checkpoint(self, chkpt_pth_format: str):
+        chkpt_dict = {
+            "model": self.model.state_dict(),
+            "model_cfg": vars(self.model.cfg),
+            "train_cfg": vars(self.cfg),
+            "optimizer": self.optimizer.state_dict(),
+            "lr_scheduler": self.lr_scheduler.state_dict(),
+            "lr_scheduler_cfg": getattr(self.lr_scheduler, "cfg", None),
+            "optimizer_cfg": getattr(self.optimizer.state_dict(), "cfg", None),
+            "step": self.step,
+            "epoch": self.epoch,
+            "training_samples_seen": self.training_samples_seen,
+        }
+        pth = chkpt_pth_format.format(epoch=self.epoch, wandb_run_name=self.wandb_run.name)
+        dir_path = os.path.dirname(pth)
+        if dir_path:  # handle case where pth has no directory component
+            os.makedirs(dir_path, exist_ok=True)
+        # Save checkpoint
+        torch.save(chkpt_dict, pth)
+        if issubclass(type(self.model), PreTrainedModel):
+            pretrained_pth = chkpt_pth_format[:-3]
+            self.model.save_pretrained(pretrained_pth) # remove .pt
+            print("Saved checkpoint to", pth, " and as pretrained model at", pretrained_pth)
+        else:
+            print("Saved checkpoint to", pth)
 
 
 def wandb_init(

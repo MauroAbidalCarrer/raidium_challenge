@@ -1,9 +1,8 @@
 import os
 import warnings
-from itertools import product
 from typing import Any, Optional
-from dataclasses import is_dataclass
 from collections import defaultdict
+from dataclasses import is_dataclass
 
 import torch
 import wandb
@@ -61,8 +60,6 @@ class Trainer:
             criterion: cfg.criterion_t,
             chkpt_pth_format: str | None,
         ) -> list[dict[str, Any]]:
-        self.save_checkpoint(chkpt_pth_format)
-        exit(0)
         warnings.filterwarnings(
             "ignore",
             message="RandomErasing.*tv_tensors.Mask",

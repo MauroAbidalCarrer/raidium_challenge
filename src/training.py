@@ -126,6 +126,9 @@ class Trainer:
         mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
         epochs_steps_dicts: dict[str, Tensor] = defaultdict(mk_epoch_buff)
         for batch_i, batch_dict in enumerate(train_loader):
+            if isinstance(batch_dict, list):
+                batch_dict = {"x": batch_dict[0], "y_true": batch_dict[1]}
+            # print(type(batch_dict), len(batch_dict["y_true"]))
             batch_dict = dataset.preprocess_batch(batch_dict)
             with timing.time_to_run("training/step"):
                 step_dict = self.perform_training_step(batch_dict, criterion)
@@ -201,11 +204,13 @@ class Trainer:
         eval_dict: dict[str, Tensor] = defaultdict(mk_epoch_buff)
         seg_preds = []
         seg_y_true = []
-        for batch_i, batch_dict in enumerate(data_loader):
-            batch_dict = dataset.preprocess_batch(batch_dict)
+        for batch_i, batch in enumerate(data_loader):
+            if isinstance(batch, list):
+                batch = {"x": batch[0], "y_true": batch[1]}
+            batch = dataset.preprocess_batch(batch)
             with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
-                model_output_dict = self.model(batch_dict)
-                loss_dict = criterion(batch_dict | model_output_dict)
+                model_output_dict = self.model(batch)
+                loss_dict = criterion(batch | model_output_dict)
             loss_dict["loss_norm"] = torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
                 1.0, # TODO: Hypertune this
@@ -214,9 +219,9 @@ class Trainer:
                 eval_dict[k][batch_i] = v.detach()
             if "y_pred" in model_output_dict:
                 pred = torch.argmax(model_output_dict["y_pred"], dim=1)
-                seg_y_true.append(batch_dict["y_true"].squeeze().cpu().numpy())
+                seg_y_true.append(batch["y_true"].squeeze().cpu().numpy())
                 seg_preds.append(pred.squeeze().cpu().numpy())
-                self.confuse_mat_metric_step(batch_dict, model_output_dict)
+                self.confuse_mat_metric_step(batch, model_output_dict)
         eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
         eval_dict["training_samples_seen"] = self.training_samples_seen
         if len(data_loader) and "y_pred" in model_output_dict:

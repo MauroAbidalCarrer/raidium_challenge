@@ -57,14 +57,18 @@ def mk_segmentation_data_loaders(
     print("train_dl_kwargs:", train_dl_kwargs)
     y_test_fill = torch.zeros(len(x_test), 256, 256, device=cfg.DEVICE)
     return {
-        "train": mk_dl_from_tensors(x_train, y_train, **train_dl_kwargs, collate_fn=collate_segmentation_batch),
-        "valid": mk_dl_from_tensors(x_valid, y_valid, batch_size=train_cfg.batch_size, collate_fn=collate_segmentation_batch),
-        "test":  mk_dl_from_tensors(x_test, y_test_fill, batch_size=train_cfg.batch_size, collate_fn=collate_segmentation_batch),
+        "train": mk_dl_from_tensors(x_train, y_train, **train_dl_kwargs), #, collate_fn=collate_segmentation_batch),
+        "valid": mk_dl_from_tensors(x_valid, y_valid, batch_size=train_cfg.batch_size), #, collate_fn=collate_segmentation_batch),
+        "test":  mk_dl_from_tensors(x_test, y_test_fill, batch_size=train_cfg.batch_size), #, collate_fn=collate_segmentation_batch),
     }
 
-def collate_segmentation_batch(batch: list[Tensor]) -> dict[str, Tensor]:
-    xs = [sample[0] for sample in batch]
-    return {"x": torch.cat(xs, dim=0)}
+# def collate_segmentation_batch(batch: list[Tensor]) -> dict[str, Tensor]:
+#     print(type(batch))
+#     print(len(batch))
+#     for s in batch:
+#         print(batch.shape)
+#     xs = [sample[0] for sample in batch]
+#     return {"x": torch.cat(xs, dim=0)}
 
 def mk_dl_from_tensors(*tensors: list[Tensor], **data_loader_kwargs) -> DataLoader:
     dataset = TensorDataset(*tensors)
@@ -175,10 +179,10 @@ def collate_ssl_batch(batch: list[Tensor]) -> dict[str, Tensor]:
     xs = [sample[0] for sample in batch]
     return {"x": torch.cat(xs, dim=0)}
 
-def preprocess_batch(batch_dict: dict[str, Any]) -> dict[str, Any]:
+def preprocess_batch(batch_dict: dict[str, Tensor]) -> dict[str, Any]:
     x = batch_dict["x"]
     x = x.to(device=DEVICE, dtype=torch.float)
-    if x.shape != 4:
+    if x.ndim != 4:
         x = x.unsqueeze(1)
     batch_dict["x"] = (x - cfg.X_MEAN) / cfg.X_STD
     if "y_true" in batch_dict:

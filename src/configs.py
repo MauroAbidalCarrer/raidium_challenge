@@ -105,7 +105,13 @@ WANDB_RUN_TAGS = {
         "finetuning",
         "downscaled",
         "swin_vit",
-    ]
+    ],
+    "fpn": [
+        "segmentation",
+        "downscaled",
+        "swin_vit",
+        "fpn"
+    ],
 }
 
 @dataclass

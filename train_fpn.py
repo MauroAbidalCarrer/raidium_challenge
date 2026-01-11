@@ -51,15 +51,18 @@ class SwinSegmentationModel(nn.Module):
             x = self.proj[i](x)
 
             x_shape = x.shape
-            if i > 0:
-                x = F.interpolate(
-                    x,
-                    scale_factor=2 ** min(i, 2),
-                    mode="bilinear",
-                    align_corners=False,
-                )
+            # if i > 0:
+            x = F.interpolate(
+                x,
+                (128, 128),
+                # scale_factor=2 ** min(i, 2),
+                mode="bilinear",
+                align_corners=False,
+            )
 
             feats.append(x)
+        #     print("og shape", x_shape, "interpolated", x.shape)
+        # print("=========")
         
         x = torch.cat(feats, dim=1)
         x = self.fuse(x)
@@ -71,14 +74,26 @@ class SwinSegmentationModel(nn.Module):
 def main():
     # Set configs
     train_cfg = cfg.TrainingConfig(
-        n_epochs=100,
+        n_epochs=2000,
         batch_size=32,
-        transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
+        transform=v2.Compose([
+            v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
+            v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
+        ]),
         checkpointing_interval=50,
         eval_interval=10,
     )
     optim_cfg = cfg.OPTIM_CFGS["unet"]
-    wandb_tags = cfg.WANDB_RUN_TAGS["donwscaled_swin_finetuning"]
+    wandb_tags = cfg.WANDB_RUN_TAGS["fpn"]
     # Instantiate objects
     backbone = SwinModel.from_pretrained(
         "hf_swin_pretrained",

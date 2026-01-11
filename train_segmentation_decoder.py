@@ -8,77 +8,57 @@ import src.configs as cfg
 from src import models, training, dataset, metrics
 
 
-class SwinSegmentationModel(nn.Module):
-    def __init__(self, backbone: SwinModel, backbone_cfg: cfg.ModelConfig, decoder_dim=256):
+class SwinSegmentation(nn.Module):
+    def __init__(self, backbone: SwinModel):
         super().__init__()
         self.backbone = backbone
-        embed_dim = backbone.config.embed_dim * 2
-        self.stage_dims = [
-            embed_dim,
-            embed_dim * 2,
-            embed_dim * 4,
-            embed_dim * 4,
-        ]
-
-
-        self.proj = nn.ModuleList([
-            nn.Conv2d(dim, decoder_dim, kernel_size=1)
-            for dim in self.stage_dims
-        ])
-
-        self.fuse = nn.Sequential(
-            nn.Conv2d(decoder_dim * 4, decoder_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(decoder_dim),
-            nn.ReLU(inplace=True),
+        for param in self.backbone.parameters():
+            param.requires_grad_(False)
+        self.decoder = nn.LazyLinear(
+            cfg.N_CLASSES * 32 ** 2,
         )
 
-        self.head = nn.Conv2d(decoder_dim, cfg.N_CLASSES, kernel_size=1)
-
     def forward(self, batch: dict[str, Tensor]) -> dict[str, Tensor]:
+        b_size = batch["x"].shape[0]
         outputs = self.backbone(
             batch["x"],
             output_hidden_states=True,
             return_dict=True,
         )
-
-        hidden_states = outputs.hidden_states[1:]  # 4 stages
-        feats = []
-        for i, h in enumerate(hidden_states):
-            B, L, C = h.shape
-            H = W = int(L ** 0.5)
-
-            x = h.transpose(1, 2).reshape(B, C, H, W)
-            x = self.proj[i](x)
-
-            x_shape = x.shape
-            if i > 0:
-                x = F.interpolate(
-                    x,
-                    scale_factor=2 ** min(i, 2),
-                    mode="bilinear",
-                    align_corners=False,
-                )
-
-            feats.append(x)
-        
-        x = torch.cat(feats, dim=1)
-        x = self.fuse(x)
-        x = self.head(x)
-
-        return {"y_pred": x}
+        # for h in outputs.hidden_states:
+        #     print(h.shape)
+        last_hidden_state = torch.cat(outputs.hidden_states[-2:], dim=-1)
+        y_pred = (
+            self.decoder(last_hidden_state) # B, 16, n_classes * 32 ** 2
+            .reshape(b_size, 128, 128, cfg.N_CLASSES) # B, 128, 128, n classes
+        )
+        y_pred = torch.permute(y_pred, (0, 3, 1, 2))
+        return {"y_pred": y_pred}
 
 
 def main():
     # Set configs
     train_cfg = cfg.TrainingConfig(
-        n_epochs=100,
+        n_epochs=2000,
         batch_size=32,
-        transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
+        transform=v2.Compose([
+            v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
+            v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
+            v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
+        ]),
         checkpointing_interval=50,
         eval_interval=10,
     )
     optim_cfg = cfg.OPTIM_CFGS["unet"]
-    wandb_tags = cfg.WANDB_RUN_TAGS["donwscaled_swin_finetuning"]
+    wandb_tags = cfg.WANDB_RUN_TAGS["fpn"]
     # Instantiate objects
     backbone = SwinModel.from_pretrained(
         "hf_swin_pretrained",
@@ -87,7 +67,7 @@ def main():
     backbone = backbone.train()
     for param in backbone.parameters():
         param.requires_grad_(False)
-    model = SwinSegmentationModel(backbone, cfg.MODELS_CFGS["downscaled_swin_vit"]).to(cfg.DEVICE)
+    model = SwinSegmentation(backbone).to(cfg.DEVICE)
     model = models.DownScalingWrapper(model).to(cfg.DEVICE)
     model.cfg = cfg.ModelConfig(
         "swin_fpn_segmentation",

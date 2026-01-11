@@ -77,7 +77,7 @@ TRAIN_CONFIGS = {
         batch_size=32,
         transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
         eval_interval=10,
-        checkpointing_interval=50,
+        checkpointing_interval=1,
         max_loss_norm=3.259898655506028, 
     )
 }
@@ -105,7 +105,13 @@ WANDB_RUN_TAGS = {
         "finetuning",
         "downscaled",
         "swin_vit",
-    ]
+    ],
+    "fpn": [
+        "segmentation",
+        "downscaled",
+        "swin_vit",
+        "fpn"
+    ],
 }
 
 @dataclass

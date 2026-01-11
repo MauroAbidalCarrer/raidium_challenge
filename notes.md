@@ -1,6 +1,3 @@
-Documentation
-    - felzenszwalb
-
 ideas:
 - optimization:
     - Use float/int8 convolution ? that would be dope
@@ -31,6 +28,12 @@ submissions:
     - Try to use monai loss/metrics when possible to reduce code base size.
     - Add readme
     - add prsentation noteook
+
+torch.Size([16, 1024, 128])
+torch.Size([16, 256, 256])
+torch.Size([16, 64, 512])
+torch.Size([16, 16, 1024])
+torch.Size([16, 16, 1024])
 
 <!-- - Use pixel wise class imbalance and weighting -->
 <!-- - fix submission -->

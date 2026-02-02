@@ -22,7 +22,7 @@ My best performing solution is a UNet trained with:
 -   Heavy data augmentation including a lot of random erasing
 -   AdamW optimizer
 Here is a small video of the model training (not the model I used to rank 6th):
-![model_training](./train_vid_cache/segmentation_animation.mp4)
+![model_training](https://youtu.be/csb_RyoLXdA)
 
 This first supervised solution does not exploit all the data available since it only uses the 800 partially labeled images.
 I actually spent most of the competition on semi-supervised learning solutions.

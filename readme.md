@@ -20,9 +20,12 @@ My best performing solution is a UNet trained with:
     > For some unkown reason the model was very sensitive to the batch size.  
     > I assume this is because the labeled images are partially segmented and the classes distribution is very uneven.  
 -   Heavy data augmentation including a lot of random erasing
--   AdamW optimizer
+-   AdamW optimizer  
+
 Here is a small video of the model training (not the model I used to rank 6th):
-![model_training](https://youtu.be/csb_RyoLXdA)
+![model_training](./readme_ressources/segmentation_animation-ezgif.com-video-to-gif-converter.gif)
+*The third row shows the labeled images.*  
+*You can see that labels are missing, for example, both chest images have missing labeled lung.*  
 
 This first supervised solution does not exploit all the data available since it only uses the 800 partially labeled images.
 I actually spent most of the competition on semi-supervised learning solutions.

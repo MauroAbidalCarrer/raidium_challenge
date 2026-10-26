@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from torchvision.transforms import v2
 from torch.utils.data import DataLoader
 
-from src import dataset
+from raidium_challenge import dataset
 
 
 MAX_N_SAMPLES_TO_PLOT = 5

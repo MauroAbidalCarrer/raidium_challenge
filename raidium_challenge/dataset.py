@@ -19,8 +19,8 @@ from torch.utils.data import (
     Sampler,
 )
 
-import src.configs as cfg
-from src.configs import TrainingConfig, DEVICE
+import raidium_challenge.configs as cfg
+from raidium_challenge.configs import TrainingConfig, DEVICE
 from sklearn.model_selection import train_test_split
 
 

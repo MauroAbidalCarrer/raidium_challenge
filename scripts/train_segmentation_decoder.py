@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from torchvision.transforms import v2
 from transformers import SwinModel
 
-import src.configs as cfg
-from src import models, training, dataset, metrics
+import raidium_challenge.configs as cfg
+from raidium_challenge import models, training, dataset, metrics
 
 
 class SwinSegmentation(nn.Module):

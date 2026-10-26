@@ -19,14 +19,14 @@ from torch.optim.lr_scheduler import (
     ConstantLR
 )
 
-from src import (
+from raidium_challenge import (
     dataset,
     metrics,
     timing,
     utils,
     models,
 )
-from src import configs as cfg
+from raidium_challenge import configs as cfg
 
 
 class Trainer:

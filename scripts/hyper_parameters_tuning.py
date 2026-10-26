@@ -11,8 +11,8 @@ import pandas as pd
 from optuna.trial import TrialState
 from sklearn.model_selection import train_test_split
 
-import src.configs as cfg
-from src import dataset, models, training, metrics
+import raidium_challenge.configs as cfg
+from raidium_challenge import dataset, models, training, metrics
 
 
 def main():

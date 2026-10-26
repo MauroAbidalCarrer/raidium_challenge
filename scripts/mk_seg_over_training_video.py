@@ -9,8 +9,8 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.animation import FuncAnimation
 
-from src import configs as cfg
-from src import dataset, models
+from raidium_challenge import configs as cfg
+from raidium_challenge import dataset, models
 
 
 MK_SEGS_TRACK_DESC = "Making segmentation preds over epochs"

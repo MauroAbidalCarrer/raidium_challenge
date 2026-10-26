@@ -37,7 +37,7 @@ dependencies = [
 
 
 [tool.uv.build-backend]
-module-name = "src"
+module-name = "raidium_challenge"
 module-root = ""
 
 

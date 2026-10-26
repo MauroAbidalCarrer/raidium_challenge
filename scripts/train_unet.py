@@ -2,8 +2,8 @@ import sys
 
 import torch
 
-from src import configs as cfg
-from src import dataset, training, models, metrics
+from raidium_challenge import configs as cfg
+from raidium_challenge import dataset, training, models, metrics
 
 
 def main():

@@ -10,13 +10,13 @@ import pandas as pd
 from torch import Tensor
 import torch.nn.functional as F
 
-from src.configs import (
+from raidium_challenge.configs import (
     TrainingConfig,
     N_CLASSES,
     DEVICE,
 )
 
-from src import configs as cfg
+from raidium_challenge import configs as cfg
 
 
 def ssl_loss(forward_dict: dict[str, Any]) -> dict[str, Tensor]:

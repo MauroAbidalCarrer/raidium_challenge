@@ -34,6 +34,7 @@ class TrainingConfig:
     n_epochs: int = 5000
     batch_size: int = 128
     test_size: float = 0.02
+    target_metric: str = None
     # losses
     cross_entropy_loss_weight: float = 1
     dice_loss_weight: float = 2
@@ -48,6 +49,9 @@ class TrainingConfig:
     max_loss_norm: float = 1
     checkpointing_interval: int  = 5
     eval_interval: int = 50
+
+    def __post_init__(self):
+        assert self.target_metric is not None, "target metric in training config must be specified."
 
 TRAIN_CONFIGS = {
     "unet_training": TrainingConfig(
@@ -71,6 +75,7 @@ TRAIN_CONFIGS = {
             v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
             v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
         ]),
+        target_metric = "val/dice_score",
     ),
     "swin_pretraining": TrainingConfig(
         n_epochs=2000,
@@ -79,6 +84,8 @@ TRAIN_CONFIGS = {
         eval_interval=10,
         checkpointing_interval=1,
         max_loss_norm=3.259898655506028, 
+        target_metric = "val/mae_loss",
+    ),
     )
 }
 

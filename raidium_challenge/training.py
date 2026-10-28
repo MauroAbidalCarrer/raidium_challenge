@@ -148,11 +148,6 @@ class Trainer:
 
     @torch.no_grad
     def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: cfg.criterion_t):
-        """
-        Evaluates the reconstruction and seg losses of validation split in eval mode.
-        Evaluates the seg losses of validation split in inference mode.
-        Evaluates the recon of test split in eval mode.
-        """
         self.model = self.model.eval()
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
         self.wandb_log_dict_with_prefix(valid_eval_dict, "validation")
@@ -234,7 +229,7 @@ class Trainer:
         )
         self.records.append(data_with_prefix | trainer_data)
 
-    def save_checkpoint(self, chkpt_pth_format: str):
+    def save_checkpoint(self):
         chkpt_dict = {
             "model": self.model.state_dict(),
             "model_cfg": vars(self.model.cfg),

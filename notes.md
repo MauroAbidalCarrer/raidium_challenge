@@ -4,6 +4,8 @@
     -   verify time_to_run calls
     -   verify configs
     -   Setup git lfs for the repo? DVC?
+    -   Fix interrupt signal handling
+    -   Fix timing to not block 
 -   Establish more metrics to get a better understanding of the of the training
 -   Undestand the effect of the most sensitive hyper parameters:
     -   batch size (understand inverse relationship with batch size and dice score)

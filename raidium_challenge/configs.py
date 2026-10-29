@@ -5,6 +5,7 @@ from typing import (
     Tuple,
     Dict,
 )
+from operator import lt, gt
 from dataclasses import dataclass, field
 
 import torch
@@ -35,6 +36,7 @@ class TrainingConfig:
     batch_size: int = 128
     test_size: float = 0.02
     target_metric: str = None
+    # target_objective: Literal["min", "max"] = None
     # losses
     cross_entropy_loss_weight: float = 1
     dice_loss_weight: float = 2
@@ -52,6 +54,13 @@ class TrainingConfig:
 
     def __post_init__(self):
         assert self.target_metric is not None, "target metric in training config must be specified."
+        # if self.target_obejctive == "min":
+        #     self.target_objective_op = lt
+        # elif self.target_objective == "max":
+        #     self.target_objective_fn = gt
+        # else:
+        #     raise ValueErrorException("TrainingConfig.target_objective must either be 'min' or 'max'.")
+
 
 TRAIN_CONFIGS = {
     "unet_training": TrainingConfig(

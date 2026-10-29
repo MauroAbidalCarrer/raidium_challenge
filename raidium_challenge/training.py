@@ -78,13 +78,14 @@ class Trainer:
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
-            is_chkpt_epoch = self.epoch % self.cfg.checkpointing_interval == 0
-            is_chkpt_epoch = is_chkpt_epoch and self.epoch != 0
-            is_chkpt_epoch = is_chkpt_epoch or is_last_epoch
-            is_chkpt_epoch = is_chkpt_epoch and chkpt_pth_format is not None
-            if is_chkpt_epoch:
+            if is_last_epoch or self.target_objective_improved():
                 self.save_checkpoint(chkpt_pth_format)
         return self.records
+
+    def target_objective_improved(self) -> bool:
+        last_objective_value = self.wandb_run.scan_history(keys=[self.train_cfg.target_metric])
+        print("last_objective_value:", last_objective_value)
+        # best_objective_value
 
     def train_model_for_single_epoch(
             self,

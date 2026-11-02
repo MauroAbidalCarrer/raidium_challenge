@@ -59,7 +59,6 @@ class Trainer:
             self,
             data_loaders: dict[str, DataLoader],
             criterion: cfg.criterion_t,
-            chkpt_pth_format: str | None,
         ) -> list[dict[str, Any]]:
         warnings.filterwarnings(
             "ignore",
@@ -78,14 +77,24 @@ class Trainer:
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
-            if is_last_epoch or self.target_objective_improved():
-                self.save_checkpoint(chkpt_pth_format)
+            self.save_checkpoint(self.cfg.last_chkpt_pth)
+            if self.target_objective_improved():
+                self.save_checkpoint(self.cfgbest_chkpt_pth)
+                self.best_target_metric_val = self.last_target_metric_val
+            self.update_best_metric_val()
         return self.records
 
     def target_objective_improved(self) -> bool:
-        last_objective_value = self.wandb_run.scan_history(keys=[self.train_cfg.target_metric])
-        print("last_objective_value:", last_objective_value)
-        # best_objective_value
+        if self.last_target_metric_val is None:
+            raise ValueError("last_target_metric_val is was not logged, please make sure that it's present in the wandb logged metrics.")
+        return (
+            self.best_target_metric_val is None
+            or
+            self.cfg.target_improved_fn(
+                self.last_target_metric_val,
+                self.best_target_metric_val,
+            )
+        )
 
     def train_model_for_single_epoch(
             self,
@@ -99,7 +108,6 @@ class Trainer:
         for batch_i, batch_dict in enumerate(train_loader):
             if isinstance(batch_dict, list):
                 batch_dict = {"x": batch_dict[0], "y_true": batch_dict[1]}
-            # print(type(batch_dict), len(batch_dict["y_true"]))
             batch_dict = dataset.preprocess_batch(batch_dict)
             with timing.time_to_run("training/step"):
                 step_dict = self.perform_training_step(batch_dict, criterion)
@@ -110,8 +118,6 @@ class Trainer:
         epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         self.epoch += 1
         self.confuse_mat_metric.reset()
-        #confuse_mat_metric_agg = self.confuse_mat_metric.aggregate()
-        #epoch_dict["confuse_mat_metric"] = confuse_mat_metric_agg
         return epoch_dict
 
     def perform_training_step(
@@ -195,42 +201,20 @@ class Trainer:
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
-        if "confuse_mat_metric" in data:
-            confuse_mat_metrics: list[Tensor] = data["confuse_mat_metric"]
-            del data["confuse_mat_metric"]
-        #     confuse_mat_metrics = (
-        #         torch.stack(confuse_mat_metrics)
-        #         .cpu()
-        #         .numpy()
-        #         .tolist()
-        #     )
-        #     cls_indices = list(range(cfg.N_CLASSES))
-        #     for metric_name, metric_values in zip(cfg.CONFUSE_MAT_METRICS_NAMES, confuse_mat_metrics):
-        #         confuse_mat_metric_table = wandb.Table(
-        #             data=list(zip(cls_indices, metric_values)),
-        #             columns=["cls_idx", f"{metric_name}_value"],
-        #         )
-        #         data[metric_name] = wandb.plot.bar(
-        #             confuse_mat_metric_table,
-        #             value="cls_idx",
-        #             label=f"{metric_name}_value",
-        #             title=metric_name,
-        #         )
         data_with_prefix = {prefix + "/" + k: v for k, v in data.items()}
         trainer_data = {
             "training/epoch": self.epoch,
             "training/step": self.step,
             "training/traing_samples_seen": self.training_samples_seen,
-            # for backward compatibility with legacy code
-            "training/samples_seen": self.training_samples_seen,
+            "training/samples_seen": self.training_samples_seen, # for backward compatibility with legacy code
         }
-        wandb.log(
-            data=data_with_prefix | trainer_data,
-            step=self.step,
-        )
-        self.records.append(data_with_prefix | trainer_data)
+        new_record = data_with_prefix | trainer_data
+        wandb.log(data=new_record, step=self.step)
+        self.records.append(new_record)
+        if self.cfg.target_metric in new_record:
+            self.last_target_metric_val = new_record[self.cfg.target_metric]
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, pth: str):
         chkpt_dict = {
             "model": self.model.state_dict(),
             "model_cfg": vars(self.model.cfg),
@@ -243,7 +227,6 @@ class Trainer:
             "epoch": self.epoch,
             "training_samples_seen": self.training_samples_seen,
         }
-        pth = chkpt_pth_format.format(epoch=self.epoch, wandb_run_name=self.wandb_run.name)
         dir_path = os.path.dirname(pth)
         if dir_path:  # handle case where pth has no directory component
             os.makedirs(dir_path, exist_ok=True)

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import (
     Optional,
     Callable,
@@ -36,8 +37,7 @@ class TrainingConfig:
     batch_size: int = 128
     test_size: float = 0.02
     target_metric: str = None
-    # target_objective: Literal["min", "max"] = None
-    # losses
+    target_objective: Literal["min", "max"] = None #: callable[[float, float], bool] = None
     cross_entropy_loss_weight: float = 1
     dice_loss_weight: float = 2
     rec_loss_weight: float = 1
@@ -49,17 +49,14 @@ class TrainingConfig:
     include_backgroud: Optional[bool] = True
     dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
     max_loss_norm: float = 1
-    checkpointing_interval: int  = 5
     eval_interval: int = 50
+    ckpt_dir: Path = None
 
     def __post_init__(self):
         assert self.target_metric is not None, "target metric in training config must be specified."
-        # if self.target_obejctive == "min":
-        #     self.target_objective_op = lt
-        # elif self.target_objective == "max":
-        #     self.target_objective_fn = gt
-        # else:
-        #     raise ValueErrorException("TrainingConfig.target_objective must either be 'min' or 'max'.")
+        assert self.target_objective not in ('min', 'max'), "target_objective must either be min or max."
+        assert self.ckpt_dir is not None, "Please provide a checkpoint dir to save the checkpoints to."
+        self.target_improved_fn = lt if self.target_objective == "min" else gt
 
 
 TRAIN_CONFIGS = {
@@ -70,7 +67,7 @@ TRAIN_CONFIGS = {
         cross_entropy_loss_weight= 1,
         sampling = "weighted",
         dice_loss = "custom",
-        checkpointing_interval = 2,
+        # checkpointing_interval = 2,
         transform = v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
@@ -91,11 +88,10 @@ TRAIN_CONFIGS = {
         batch_size=32,
         transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
         eval_interval=10,
-        checkpointing_interval=1,
+        # checkpointing_interval=1,
         max_loss_norm=3.259898655506028, 
         target_metric = "val/mae_loss",
     ),
-    )
 }
 
 OPTIM_CFGS = {

@@ -52,7 +52,7 @@ def main():
     trainer.train_model(
         data_loaders,
         criterion,
-        "checkpoints/unet/{wandb_run_name}/unet_epoch_{epoch}.pt",
+        #"checkpoints/unet/{wandb_run_name}/unet_epoch_{epoch}.pt",
     )
 
 

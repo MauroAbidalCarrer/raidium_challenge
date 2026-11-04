@@ -49,17 +49,14 @@ class Trainer:
         dataset.mk_dataset(verbose=False)
         torch.backends.cuda.matmul.fp32_precision = 'ieee'
         utils.setup_seed(train_cfg.random_state)
-        self.confuse_mat_metric = monai_metrics.ConfusionMatrixMetric(
-            metric_name=cfg.CONFUSE_MAT_METRICS_NAMES,
-            reduction="mean_batch",
-        )
         self.records: list[dict[str, Any]] = []
+        self.last_target_metric_val = None
+        self.best_target_metric_val = None
 
     def train_model(
             self,
             data_loaders: dict[str, DataLoader],
             criterion: cfg.criterion_t,
-            chkpt_pth_format: str | None,
         ) -> list[dict[str, Any]]:
         warnings.filterwarnings(
             "ignore",
@@ -78,13 +75,24 @@ class Trainer:
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
-            is_chkpt_epoch = self.epoch % self.cfg.checkpointing_interval == 0
-            is_chkpt_epoch = is_chkpt_epoch and self.epoch != 0
-            is_chkpt_epoch = is_chkpt_epoch or is_last_epoch
-            is_chkpt_epoch = is_chkpt_epoch and chkpt_pth_format is not None
-            if is_chkpt_epoch:
-                self.save_checkpoint(chkpt_pth_format)
+            self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "last_checkpoint.pt"))
+            if self.target_objective_improved():
+                print(f"Epoch {self.epoch}, has best new {self.cfg.target_metric} increased from {self.best_target_metric_val} to {self.last_target_metric_val}.")
+                self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "best_checkpoint.pt"))
+                self.best_target_metric_val = self.last_target_metric_val
         return self.records
+
+    def target_objective_improved(self) -> bool:
+        if self.last_target_metric_val is None:
+            raise ValueError("last_target_metric_val is was not logged, please make sure that it's present in the wandb logged metrics.")
+        return (
+            self.best_target_metric_val is None
+            or
+            self.cfg.target_improved_fn(
+                self.last_target_metric_val,
+                self.best_target_metric_val,
+            )
+        )
 
     def train_model_for_single_epoch(
             self,
@@ -98,7 +106,6 @@ class Trainer:
         for batch_i, batch_dict in enumerate(train_loader):
             if isinstance(batch_dict, list):
                 batch_dict = {"x": batch_dict[0], "y_true": batch_dict[1]}
-            # print(type(batch_dict), len(batch_dict["y_true"]))
             batch_dict = dataset.preprocess_batch(batch_dict)
             with timing.time_to_run("training/step"):
                 step_dict = self.perform_training_step(batch_dict, criterion)
@@ -108,9 +115,6 @@ class Trainer:
         epoch_dict["training_samples_seen"] = self.training_samples_seen
         epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         self.epoch += 1
-        self.confuse_mat_metric.reset()
-        #confuse_mat_metric_agg = self.confuse_mat_metric.aggregate()
-        #epoch_dict["confuse_mat_metric"] = confuse_mat_metric_agg
         return epoch_dict
 
     def perform_training_step(
@@ -132,27 +136,14 @@ class Trainer:
             self.model.parameters(),
             self.cfg.max_loss_norm,
         )
-        self.confuse_mat_metric_step(batch_dict, model_output_dict)
         self.optimizer.step()
         self.training_samples_seen += len(batch_dict["x"])
         self.lr_scheduler.step()
         self.step += 1
         return {**loss_dict, "loss_norm": loss_norm}
 
-    def confuse_mat_metric_step(self, batch: dict[str, Tensor], model_output: dict[str, Tensor]):
-        if "y_pred" in model_output and "y_true" in batch:
-            self.confuse_mat_metric(
-                torch.nn.functional.one_hot(model_output["y_pred"].argmax(dim=1), cfg.N_CLASSES).permute(0, 3, 1, 2),
-                torch.nn.functional.one_hot(batch["y_true"], cfg.N_CLASSES).permute(0, 3, 1, 2),
-            )
-
     @torch.no_grad
     def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: cfg.criterion_t):
-        """
-        Evaluates the reconstruction and seg losses of validation split in eval mode.
-        Evaluates the seg losses of validation split in inference mode.
-        Evaluates the recon of test split in eval mode.
-        """
         self.model = self.model.eval()
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
         self.wandb_log_dict_with_prefix(valid_eval_dict, "validation")
@@ -186,55 +177,30 @@ class Trainer:
                 pred = torch.argmax(model_output_dict["y_pred"], dim=1)
                 seg_y_true.append(batch["y_true"].squeeze().cpu().numpy())
                 seg_preds.append(pred.squeeze().cpu().numpy())
-                self.confuse_mat_metric_step(batch, model_output_dict)
         eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
         eval_dict["training_samples_seen"] = self.training_samples_seen
         if len(data_loader) and "y_pred" in model_output_dict:
-            eval_dict["confuse_mat_metric"] = self.confuse_mat_metric.aggregate()
             with timing.time_to_run("evaluation/dice_score"):
                 seg_preds = np.concat(seg_preds).reshape(-1 , 256 * 256)
                 seg_y_true = np.concat(seg_y_true).reshape(-1, 256 * 256)
                 eval_dict["dice_score"] = metrics.dice_pandas(seg_y_true, seg_preds)
-        self.confuse_mat_metric.reset()
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
-        if "confuse_mat_metric" in data:
-            confuse_mat_metrics: list[Tensor] = data["confuse_mat_metric"]
-            del data["confuse_mat_metric"]
-        #     confuse_mat_metrics = (
-        #         torch.stack(confuse_mat_metrics)
-        #         .cpu()
-        #         .numpy()
-        #         .tolist()
-        #     )
-        #     cls_indices = list(range(cfg.N_CLASSES))
-        #     for metric_name, metric_values in zip(cfg.CONFUSE_MAT_METRICS_NAMES, confuse_mat_metrics):
-        #         confuse_mat_metric_table = wandb.Table(
-        #             data=list(zip(cls_indices, metric_values)),
-        #             columns=["cls_idx", f"{metric_name}_value"],
-        #         )
-        #         data[metric_name] = wandb.plot.bar(
-        #             confuse_mat_metric_table,
-        #             value="cls_idx",
-        #             label=f"{metric_name}_value",
-        #             title=metric_name,
-        #         )
         data_with_prefix = {prefix + "/" + k: v for k, v in data.items()}
         trainer_data = {
             "training/epoch": self.epoch,
             "training/step": self.step,
             "training/traing_samples_seen": self.training_samples_seen,
-            # for backward compatibility with legacy code
-            "training/samples_seen": self.training_samples_seen,
+            "training/samples_seen": self.training_samples_seen, # for backward compatibility with legacy code
         }
-        wandb.log(
-            data=data_with_prefix | trainer_data,
-            step=self.step,
-        )
-        self.records.append(data_with_prefix | trainer_data)
+        new_record = data_with_prefix | trainer_data
+        wandb.log(data=new_record, step=self.step)
+        self.records.append(new_record)
+        if self.cfg.target_metric in new_record:
+            self.last_target_metric_val = new_record[self.cfg.target_metric]
 
-    def save_checkpoint(self, chkpt_pth_format: str):
+    def save_checkpoint(self, pth: str):
         chkpt_dict = {
             "model": self.model.state_dict(),
             "model_cfg": vars(self.model.cfg),
@@ -247,7 +213,6 @@ class Trainer:
             "epoch": self.epoch,
             "training_samples_seen": self.training_samples_seen,
         }
-        pth = chkpt_pth_format.format(epoch=self.epoch, wandb_run_name=self.wandb_run.name)
         dir_path = os.path.dirname(pth)
         if dir_path:  # handle case where pth has no directory component
             os.makedirs(dir_path, exist_ok=True)

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import (
     Optional,
     Callable,
@@ -5,6 +6,7 @@ from typing import (
     Tuple,
     Dict,
 )
+from operator import lt, gt
 from dataclasses import dataclass, field
 
 import torch
@@ -34,7 +36,8 @@ class TrainingConfig:
     n_epochs: int = 5000
     batch_size: int = 128
     test_size: float = 0.02
-    # losses
+    target_metric: str = None
+    target_objective: Literal["min", "max"] = None #: callable[[float, float], bool] = None
     cross_entropy_loss_weight: float = 1
     dice_loss_weight: float = 2
     rec_loss_weight: float = 1
@@ -46,8 +49,15 @@ class TrainingConfig:
     include_backgroud: Optional[bool] = True
     dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
     max_loss_norm: float = 1
-    checkpointing_interval: int  = 5
     eval_interval: int = 50
+    ckpt_dir: Path = None
+
+    def __post_init__(self):
+        assert self.target_metric is not None, "target metric in training config must be specified."
+        assert self.target_objective in ('min', 'max'), f"target_objective must either be min or max, got {self.target_objective}."
+        assert self.ckpt_dir is not None, "Please provide a checkpoint dir to save the checkpoints to."
+        self.target_improved_fn = lt if self.target_objective == "min" else gt
+
 
 TRAIN_CONFIGS = {
     "unet_training": TrainingConfig(
@@ -57,7 +67,7 @@ TRAIN_CONFIGS = {
         cross_entropy_loss_weight= 1,
         sampling = "weighted",
         dice_loss = "custom",
-        checkpointing_interval = 2,
+        # checkpointing_interval = 2,
         transform = v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
@@ -71,15 +81,21 @@ TRAIN_CONFIGS = {
             v2.RandomErasing(p=0.2, scale=(0.05, 0.1)),
             v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
         ]),
+        target_metric = "validation/dice_score",
+        target_objective = "max",
+        ckpt_dir = "cache/checkpoints/unet_supervised",
     ),
     "swin_pretraining": TrainingConfig(
         n_epochs=2000,
         batch_size=32,
         transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
         eval_interval=10,
-        checkpointing_interval=1,
+        # checkpointing_interval=1,
         max_loss_norm=3.259898655506028, 
-    )
+        target_metric = "validation/mae_loss",
+        target_objective = "min",
+        ckpt_dir = "cache/checkpoints/swin_pretraining",
+    ),
 }
 
 OPTIM_CFGS = {

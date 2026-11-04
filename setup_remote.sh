@@ -30,7 +30,8 @@ cd repos
 echo "Remote WORKING_REPO: \$WORKING_REPO"
 echo "Cloning branch: $CURRENT_BRANCH"
 
-git clone -b "$CURRENT_BRANCH" "\$WORKING_REPO"
+GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+    git clone -b "$CURRENT_BRANCH" "\$WORKING_REPO"
 cd \$(basename "\$WORKING_REPO" .git)
 
 git remote rename origin github

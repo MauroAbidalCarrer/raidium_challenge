@@ -50,6 +50,8 @@ class Trainer:
         torch.backends.cuda.matmul.fp32_precision = 'ieee'
         utils.setup_seed(train_cfg.random_state)
         self.records: list[dict[str, Any]] = []
+        self.last_target_metric_val = None
+        self.best_target_metric_val = None
 
     def train_model(
             self,
@@ -73,12 +75,11 @@ class Trainer:
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
-            self.save_checkpoint(self.cfg.last_chkpt_pth)
+            self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "last_checkpoint.pt"))
             if self.target_objective_improved():
                 print(f"Epoch {self.epoch}, has best new {self.cfg.target_metric} increased from {self.best_target_metric_val} to {self.last_target_metric_val}.")
-                self.save_checkpoint(self.cfgbest_chkpt_pth)
+                self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "best_checkpoint.pt"))
                 self.best_target_metric_val = self.last_target_metric_val
-            self.update_best_metric_val()
         return self.records
 
     def target_objective_improved(self) -> bool:
@@ -194,7 +195,6 @@ class Trainer:
             "training/samples_seen": self.training_samples_seen, # for backward compatibility with legacy code
         }
         new_record = data_with_prefix | trainer_data
-        print(new_record)
         wandb.log(data=new_record, step=self.step)
         self.records.append(new_record)
         if self.cfg.target_metric in new_record:

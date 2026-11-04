@@ -54,7 +54,7 @@ class TrainingConfig:
 
     def __post_init__(self):
         assert self.target_metric is not None, "target metric in training config must be specified."
-        assert self.target_objective not in ('min', 'max'), "target_objective must either be min or max."
+        assert self.target_objective in ('min', 'max'), f"target_objective must either be min or max, got {self.target_objective}."
         assert self.ckpt_dir is not None, "Please provide a checkpoint dir to save the checkpoints to."
         self.target_improved_fn = lt if self.target_objective == "min" else gt
 
@@ -82,6 +82,8 @@ TRAIN_CONFIGS = {
             v2.RandomAffine(degrees=(0, 0), translate=(0.1, 0.3), scale=(0.75, 1)),
         ]),
         target_metric = "val/dice_score",
+        target_objective = "max",
+        ckpt_dir = "cache/checkpoints/unet_supervised",
     ),
     "swin_pretraining": TrainingConfig(
         n_epochs=2000,
@@ -91,6 +93,8 @@ TRAIN_CONFIGS = {
         # checkpointing_interval=1,
         max_loss_norm=3.259898655506028, 
         target_metric = "val/mae_loss",
+        target_objective = "min",
+        ckpt_dir = "cache/checkpoints/swin_pretraining",
     ),
 }
 

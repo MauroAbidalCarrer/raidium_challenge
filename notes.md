@@ -1,11 +1,11 @@
--   Regain understanding/control over the manual repo and clean it:
+-   Regain understanding the repo and add quality of life improvements:
     -   split configs classes and instances
-    -   move dataset into cache directory
+    -   move dataset into cache directory, rename cache to data?
     -   verify time_to_run calls, use smth else than toruch cuda sync to avoid blocking asynch optim
-    -   Setup git lfs for the repo? DVC?
+    -   Setup git lfs for the repo? DVC? Taipy?
+    -   Write unit tests?
     -   Fix interrupt signal handling
--   Establish more metrics to get a better understanding of the of the training
--   Undestand the effect of the most sensitive hyper parameters:
+-   Undestand the effect of the most sensitive hyper parameters (implement more metrics along the way):
     -   batch size (understand inverse relationship with batch size and dice score)
     -   learning rates
     -   data augmentation
@@ -26,4 +26,3 @@
     -   self training on other dataset
 -   fix class perf balancing
 -   read paper on self training with weakly + unnanotated data
-

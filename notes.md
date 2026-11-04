@@ -1,8 +1,7 @@
 -   use blur and gaussian noise for data aug
 -   Regain understanding/control over the manual repo
-    -   verify checkpoint saving
+    -   split configs classes and instances
     -   verify time_to_run calls
-    -   verify configs
     -   Setup git lfs for the repo? DVC?
     -   Fix interrupt signal handling
     -   Fix timing to not block 

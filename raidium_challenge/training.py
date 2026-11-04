@@ -49,10 +49,6 @@ class Trainer:
         dataset.mk_dataset(verbose=False)
         torch.backends.cuda.matmul.fp32_precision = 'ieee'
         utils.setup_seed(train_cfg.random_state)
-        self.confuse_mat_metric = monai_metrics.ConfusionMatrixMetric(
-            metric_name=cfg.CONFUSE_MAT_METRICS_NAMES,
-            reduction="mean_batch",
-        )
         self.records: list[dict[str, Any]] = []
 
     def train_model(
@@ -79,6 +75,7 @@ class Trainer:
                 self.wandb_log_dict_with_prefix(training_dict, "training")
             self.save_checkpoint(self.cfg.last_chkpt_pth)
             if self.target_objective_improved():
+                print(f"Epoch {self.epoch}, has best new {self.cfg.target_metric} increased from {self.best_target_metric_val} to {self.last_target_metric_val}.")
                 self.save_checkpoint(self.cfgbest_chkpt_pth)
                 self.best_target_metric_val = self.last_target_metric_val
             self.update_best_metric_val()
@@ -117,7 +114,6 @@ class Trainer:
         epoch_dict["training_samples_seen"] = self.training_samples_seen
         epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         self.epoch += 1
-        self.confuse_mat_metric.reset()
         return epoch_dict
 
     def perform_training_step(
@@ -139,19 +135,11 @@ class Trainer:
             self.model.parameters(),
             self.cfg.max_loss_norm,
         )
-        self.confuse_mat_metric_step(batch_dict, model_output_dict)
         self.optimizer.step()
         self.training_samples_seen += len(batch_dict["x"])
         self.lr_scheduler.step()
         self.step += 1
         return {**loss_dict, "loss_norm": loss_norm}
-
-    def confuse_mat_metric_step(self, batch: dict[str, Tensor], model_output: dict[str, Tensor]):
-        if "y_pred" in model_output and "y_true" in batch:
-            self.confuse_mat_metric(
-                torch.nn.functional.one_hot(model_output["y_pred"].argmax(dim=1), cfg.N_CLASSES).permute(0, 3, 1, 2),
-                torch.nn.functional.one_hot(batch["y_true"], cfg.N_CLASSES).permute(0, 3, 1, 2),
-            )
 
     @torch.no_grad
     def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: cfg.criterion_t):
@@ -188,16 +176,13 @@ class Trainer:
                 pred = torch.argmax(model_output_dict["y_pred"], dim=1)
                 seg_y_true.append(batch["y_true"].squeeze().cpu().numpy())
                 seg_preds.append(pred.squeeze().cpu().numpy())
-                self.confuse_mat_metric_step(batch, model_output_dict)
         eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
         eval_dict["training_samples_seen"] = self.training_samples_seen
         if len(data_loader) and "y_pred" in model_output_dict:
-            eval_dict["confuse_mat_metric"] = self.confuse_mat_metric.aggregate()
             with timing.time_to_run("evaluation/dice_score"):
                 seg_preds = np.concat(seg_preds).reshape(-1 , 256 * 256)
                 seg_y_true = np.concat(seg_y_true).reshape(-1, 256 * 256)
                 eval_dict["dice_score"] = metrics.dice_pandas(seg_y_true, seg_preds)
-        self.confuse_mat_metric.reset()
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
@@ -209,6 +194,7 @@ class Trainer:
             "training/samples_seen": self.training_samples_seen, # for backward compatibility with legacy code
         }
         new_record = data_with_prefix | trainer_data
+        print(new_record)
         wandb.log(data=new_record, step=self.step)
         self.records.append(new_record)
         if self.cfg.target_metric in new_record:

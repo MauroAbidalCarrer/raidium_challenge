@@ -206,13 +206,13 @@ RAW_DATASET_DIR = "artifacts/dataset/raw/"
 def mk_dataset(verbose: bool=True):
     if not os.path.isdir("dataset"):
         if verbose:
-            print("No directoty 'dataset' found, creating dataset...", end="")
+            print(f"No directoty '{RAW_DATASET_DIR}' found, creating dataset...", end="")
         download_raw_dataset()
         format_dataset()
         if verbose:
             print("done")
     elif verbose:
-        print("'dataset' directory already present not doing anythin, if you want to recreate it please delete the directory.")
+        print(f"'{RAW_DATASET_DIR}' directory already present not doing anythin, if you want to recreate it please delete the directory.")
 
 PREPROCESSED_DATASET_DIR = "artifacts/dataset/preprocessed/"
 def format_dataset():

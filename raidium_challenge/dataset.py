@@ -202,7 +202,7 @@ def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Ten
     has_labels_mask = y_train.amax((1, 2)) != y_train.amin((1, 2))
     return x_train[has_labels_mask], y_train[has_labels_mask]
 
-RAW_DATASET_DIR = "artifacts/dataset/raw/"
+RAW_DATASET_DIR = Path("artifacts/dataset/raw/")
 def mk_dataset(verbose: bool=True):
     if not os.path.isdir("dataset"):
         if verbose:
@@ -214,14 +214,14 @@ def mk_dataset(verbose: bool=True):
     elif verbose:
         print(f"'{RAW_DATASET_DIR}' directory already present not doing anythin, if you want to recreate it please delete the directory.")
 
-PREPROCESSED_DATASET_DIR = "artifacts/dataset/preprocessed/"
+PREPROCESSED_DATASET_DIR = Path("artifacts/dataset/preprocessed/")
 def format_dataset():
     shutil.rmtree(PREPROCESSED_DATASET_DIR, ignore_errors=True)
     os.makedirs(PREPROCESSED_DATASET_DIR, exist_ok=True)
-    format_imgs_into_pt_file(Path("dataset/raw/x-train"))
-    format_imgs_into_pt_file(Path("dataset/raw/x-test"))
+    format_imgs_into_pt_file("x-train")
+    format_imgs_into_pt_file("x-test")
     y_train_np: pd.DataFrame = (
-        pd.read_csv('dataset/raw/y-train.csv', index_col=0)
+        pd.read_csv(RAW_DATASET_DIR / "y-train.csv", index_col=0)
         .values
         .astype("uint8")
         .T
@@ -229,12 +229,12 @@ def format_dataset():
     )
     torch.save(
         torch.from_numpy(y_train_np),
-        "dataset/formatted/y-train.pt"
+        PREPROCESSED_DATASET_DIR / "y-train.pt"
     )
 
-def format_imgs_into_pt_file(imgs_parent_dir: Path):
+def format_imgs_into_pt_file(split: str):
     tensor = load_imgs_as_tensor(imgs_parent_dir)
-    target_file = Path(PREPROCESSED_DATASET_PTH, imgs_parent_dir.parts[-1] + ".pt")
+    target_file = Path(PREPROCESSED_DATASET_DIR, imgs_parent_dir + ".pt")
     torch.save(tensor, target_file)
 
 def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
@@ -274,23 +274,18 @@ def download_raw_dataset():
 def wget_and_unzip(url: str, path: str | Path):
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
-
     zip_path = path.with_suffix(".zip")
-
     # Download
     with requests.get(url, stream=True) as r:
         r.raise_for_status()
         with open(zip_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
-
     # Unzip into the target path
     with zipfile.ZipFile(zip_path, "r") as z:
         z.extractall(path)
-
     # Remove zip file
     zip_path.unlink()
-
     # Detect the subfolder created by the ZIP
     subfolders = [p for p in path.iterdir() if p.is_dir()]
     if len(subfolders) == 1:

@@ -19,14 +19,13 @@ from torch.utils.data import (
     Sampler,
 )
 
+from raidium_challenge.constants import RAW_DATASET_DIR, PREPROCESSED_DATASET_DIR
 import raidium_challenge.config_classes as cfg
 from raidium_challenge.config_classes import TrainingConfig, DEVICE
 from sklearn.model_selection import train_test_split
 
 
-def mk_segmentation_data_loaders(
-        train_cfg: cfg.TrainingConfig
-    ) -> dict[str, DataLoader]:
+def mk_segmentation_data_loaders(train_cfg: cfg.TrainingConfig) -> dict[str, DataLoader]:
     x_train, y_train, x_test = load_raw_dataset(cfg.DEVICE)
     x_train, y_train = remove_samples_without_labels(x_train, y_train)
     x_train, x_valid, y_train, y_valid = train_test_split(
@@ -193,16 +192,15 @@ def preprocess_batch(batch_dict: dict[str, Tensor]) -> dict[str, Any]:
     return batch_dict
 
 def load_raw_dataset(device: torch.device) -> tuple[Tensor, Tensor, Tensor]:
-    y_train: Tensor = torch.load("dataset/formatted/y-train.pt").to(device=device, dtype=torch.uint8)
-    x_train = torch.load("dataset/formatted/x-train.pt").to(device=device, dtype=torch.uint8)
-    x_test = torch.load("dataset/formatted/x-test.pt").to(device=device, dtype=torch.uint8)
+    y_train: Tensor = torch.load(PREPROCESSED_DATASET_DIR / "y-train.pt").to(device=device, dtype=torch.uint8)
+    x_train = torch.load(PREPROCESSED_DATASET_DIR / "x-train.pt").to(device=device, dtype=torch.uint8)
+    x_test = torch.load(PREPROCESSED_DATASET_DIR / "x-test.pt").to(device=device, dtype=torch.uint8)
     return x_train, y_train, x_test
 
 def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Tensor, Tensor]:
     has_labels_mask = y_train.amax((1, 2)) != y_train.amin((1, 2))
     return x_train[has_labels_mask], y_train[has_labels_mask]
 
-RAW_DATASET_DIR = Path("artifacts/dataset/raw/")
 def mk_dataset(verbose: bool=True):
     if not os.path.isdir("dataset"):
         if verbose:
@@ -214,7 +212,6 @@ def mk_dataset(verbose: bool=True):
     elif verbose:
         print(f"'{RAW_DATASET_DIR}' directory already present not doing anythin, if you want to recreate it please delete the directory.")
 
-PREPROCESSED_DATASET_DIR = Path("artifacts/dataset/preprocessed/")
 def format_dataset():
     shutil.rmtree(PREPROCESSED_DATASET_DIR, ignore_errors=True)
     os.makedirs(PREPROCESSED_DATASET_DIR, exist_ok=True)

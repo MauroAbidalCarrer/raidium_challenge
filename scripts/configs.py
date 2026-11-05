@@ -34,7 +34,7 @@ TRAIN_CONFIGS = {
         ]),
         target_metric = "validation/dice_score",
         target_objective = "max",
-        ckpt_dir = "cache/checkpoints/unet_supervised",
+        ckpt_dir = "artifacts/checkpoints/unet_supervised",
     ),
     "swin_pretraining": TrainingConfig(
         n_epochs=2000,

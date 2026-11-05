@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.animation import FuncAnimation
 
-from raidium_challenge import configs as cfg
+import configs as cfg
 from raidium_challenge import dataset, models
 
 

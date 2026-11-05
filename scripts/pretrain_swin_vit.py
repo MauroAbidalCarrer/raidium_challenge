@@ -25,7 +25,7 @@ from transformers import (
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
-from raidium_challenge import configs as cfg
+import configs as cfg
 from raidium_challenge import dataset, training, models, metrics
 
 

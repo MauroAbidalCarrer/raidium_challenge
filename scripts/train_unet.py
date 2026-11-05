@@ -2,7 +2,7 @@ import sys
 
 import torch
 
-from raidium_challenge import configs as cfg
+import configs as cfg
 from raidium_challenge import dataset, training, models, metrics
 
 

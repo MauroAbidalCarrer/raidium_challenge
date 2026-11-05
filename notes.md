@@ -1,13 +1,11 @@
--   use blur and gaussian noise for data aug
--   Regain understanding/control over the manual repo
-    -   verify checkpoint saving
-    -   verify time_to_run calls
-    -   verify configs
-    -   Setup git lfs for the repo? DVC?
+-   Regain understanding the repo and add quality of life improvements:
+    -   split configs classes and instances
+    -   move dataset into cache directory, rename cache to data?
+    -   verify time_to_run calls, use smth else than toruch cuda sync to avoid blocking asynch optim
+    -   Setup git lfs for the repo? DVC? Taipy?
+    -   Write unit tests?
     -   Fix interrupt signal handling
-    -   Fix timing to not block 
--   Establish more metrics to get a better understanding of the of the training
--   Undestand the effect of the most sensitive hyper parameters:
+-   Undestand the effect of the most sensitive hyper parameters (implement more metrics along the way):
     -   batch size (understand inverse relationship with batch size and dice score)
     -   learning rates
     -   data augmentation
@@ -16,6 +14,7 @@
     -   class sampling
     -   grad norm clipping
     -   Pretrained model choice
+-   use blur and gaussian noise for data aug
 -   use pretrained backbone and/or distill bigger model ?
 -   use TTA, EMA and more data aug
 -   Setup the best model possible w/ supervised training before going into ssl
@@ -27,4 +26,3 @@
     -   self training on other dataset
 -   fix class perf balancing
 -   read paper on self training with weakly + unnanotated data
-

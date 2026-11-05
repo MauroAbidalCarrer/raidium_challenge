@@ -10,7 +10,7 @@ from monai.networks.nets import UNet
 from transformers import SwinConfig
 from transformers import SwinForMaskedImageModeling as MiMModel
 
-import raidium_challenge.configs as cfg
+import raidium_challenge.config_classes as cfg
 
 
 class MaskGenerator:

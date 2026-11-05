@@ -1,10 +1,14 @@
 -   Regain understanding the repo and add quality of life improvements:
-    -   split configs classes and instances
-    -   move dataset into cache directory, rename cache to data?
-    -   verify time_to_run calls, use smth else than toruch cuda sync to avoid blocking asynch optim
+    -   move dataset into cache directory, rename cache to artifacts
+    -   verify time_to_run calls, use smth else than toruch cuda sync to avoid blocking async optim
     -   Setup git lfs for the repo? DVC? Taipy?
     -   Write unit tests?
     -   Fix interrupt signal handling
+    -   remove notes.md from the repo and use notion?
+    -   Split metrics into a separate module and add them to the training config
+    -   compress all the scripts into simply train and infer where:
+        train would take in a list (as CLI args) of training runs (would have to change the )
+-   use pretrained backbone and/or distill bigger model ?
 -   Undestand the effect of the most sensitive hyper parameters (implement more metrics along the way):
     -   batch size (understand inverse relationship with batch size and dice score)
     -   learning rates
@@ -14,9 +18,7 @@
     -   class sampling
     -   grad norm clipping
     -   Pretrained model choice
--   use blur and gaussian noise for data aug
--   use pretrained backbone and/or distill bigger model ?
--   use TTA, EMA and more data aug
+-   use TTA, EMA and more data aug such as blur and gaussian noise
 -   Setup the best model possible w/ supervised training before going into ssl
     -   what's the best dice that we can get w/ supervised learning given a compute budget? starting from random and pretrained model?
     -   what's the best dice that we can get w/ supervised learning given an inifinite compute budget? starting from random and pretrained model?

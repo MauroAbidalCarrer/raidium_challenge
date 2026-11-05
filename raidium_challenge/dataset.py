@@ -202,6 +202,7 @@ def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Ten
     has_labels_mask = y_train.amax((1, 2)) != y_train.amin((1, 2))
     return x_train[has_labels_mask], y_train[has_labels_mask]
 
+RAW_DATASET_DIR = "artifacts/dataset/raw/"
 def mk_dataset(verbose: bool=True):
     if not os.path.isdir("dataset"):
         if verbose:
@@ -213,9 +214,10 @@ def mk_dataset(verbose: bool=True):
     elif verbose:
         print("'dataset' directory already present not doing anythin, if you want to recreate it please delete the directory.")
 
+PREPROCESSED_DATASET_DIR = "artifacts/dataset/preprocessed/"
 def format_dataset():
-    shutil.rmtree("dataset/formatted", ignore_errors=True)
-    os.makedirs("dataset/formatted", exist_ok=True)
+    shutil.rmtree(PREPROCESSED_DATASET_DIR, ignore_errors=True)
+    os.makedirs(PREPROCESSED_DATASET_DIR, exist_ok=True)
     format_imgs_into_pt_file(Path("dataset/raw/x-train"))
     format_imgs_into_pt_file(Path("dataset/raw/x-test"))
     y_train_np: pd.DataFrame = (
@@ -232,11 +234,7 @@ def format_dataset():
 
 def format_imgs_into_pt_file(imgs_parent_dir: Path):
     tensor = load_imgs_as_tensor(imgs_parent_dir)
-    target_file = Path(
-        *imgs_parent_dir.parts[:-2],
-        "formatted",
-        imgs_parent_dir.parts[-1] + ".pt"
-    )
+    target_file = Path(PREPROCESSED_DATASET_PTH, imgs_parent_dir.parts[-1] + ".pt")
     torch.save(tensor, target_file)
 
 def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
@@ -253,24 +251,24 @@ def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
     return imgs
 
 def download_raw_dataset():
-    shutil.rmtree("path/to/directory", ignore_errors=True)
-    raw_pth = Path("dataset/raw")
+    shutil.rmtree(RAW_DATASET_DIR, ignore_errors=True)
+    raw_pth = Path(RAW_DATASET_DIR)
     raw_pth.mkdir(parents=True, exist_ok=True)
     wget_and_unzip(
         "https://challengedata.ens.fr/media/public/train-images.zip",
-        "dataset/raw/x-train",
+        raw_pth / "x-train",
     )
     wget_and_unzip(
         "https://challengedata.ens.fr/media/public/test-images.zip",
-        "dataset/raw/x-test",
+        raw_pth / "x-test",
     )
     wget_to_file(
         "https://challengedata.ens.fr/media/public/annotated_labels.json",
-        "dataset/raw/annotated_labels.json",
+        raw_pth / "annotated_labels.json",
     )
     wget_to_file(
         "https://challengedata.ens.fr/media/public/label_Hnl61pT.csv",
-        "dataset/raw/y-train.csv",
+        raw_pth / "y-train.csv",
     )
 
 def wget_and_unzip(url: str, path: str | Path):

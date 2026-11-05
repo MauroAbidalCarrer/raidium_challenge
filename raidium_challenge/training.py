@@ -26,7 +26,7 @@ from raidium_challenge import (
     utils,
     models,
 )
-from raidium_challenge import configs as cfg
+from raidium_challenge import config_classes as cfg
 
 
 class Trainer:

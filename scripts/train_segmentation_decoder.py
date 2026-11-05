@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torchvision.transforms import v2
 from transformers import SwinModel
 
-import raidium_challenge.configs as cfg
+import configs as cfg
 from raidium_challenge import models, training, dataset, metrics
 
 

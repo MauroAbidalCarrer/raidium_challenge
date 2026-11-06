@@ -1,5 +1,4 @@
 -   Regain understanding the repo and add quality of life improvements:
-    -   move dataset into cache directory, rename cache to artifacts
     -   verify time_to_run calls, use smth else than toruch cuda sync to avoid blocking async optim
     -   Setup git lfs for the repo? DVC? Taipy?
     -   Write unit tests?

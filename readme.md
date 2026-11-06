@@ -1,3 +1,5 @@
+[link to the notion](https://app.notion.com/p/Raidium-challenge-4107c82b905380bb999ef9e7327e3c98?source=copy_link)
+
 # ENS and Raidium data challenge <img src="./readme_ressources/raidum_logo.png" width="100" height="100"> <img src="./readme_ressources/ENS_Logo_TL.jpg" width="100" height="100">
 This is the repo that got me 6th place in 15th of december 2025 with a dice score of 0,52.  
 15th of december 2025 was supposed to mark the end of the competition but it got postponed.  

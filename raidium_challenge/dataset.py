@@ -215,8 +215,8 @@ def mk_dataset(verbose: bool=True):
 def format_dataset():
     shutil.rmtree(PREPROCESSED_DATASET_DIR, ignore_errors=True)
     os.makedirs(PREPROCESSED_DATASET_DIR, exist_ok=True)
-    format_imgs_into_pt_file("x-train")
-    format_imgs_into_pt_file("x-test")
+    format_imgs_into_pt_file(RAW_DATASET_DIR / "x-train")
+    format_imgs_into_pt_file(RAW_DATASET_DIR / "x-test")
     y_train_np: pd.DataFrame = (
         pd.read_csv(RAW_DATASET_DIR / "y-train.csv", index_col=0)
         .values
@@ -229,9 +229,10 @@ def format_dataset():
         PREPROCESSED_DATASET_DIR / "y-train.pt"
     )
 
-def format_imgs_into_pt_file(split: str):
+def format_imgs_into_pt_file(imgs_parent_dir: str):
     tensor = load_imgs_as_tensor(imgs_parent_dir)
-    target_file = Path(PREPROCESSED_DATASET_DIR, imgs_parent_dir + ".pt")
+    target_file = Path(PREPROCESSED_DATASET_DIR, imgs_parent_dir.parts[-1] + ".pt")
+    #print("target file:", target_file)
     torch.save(tensor, target_file)
 
 def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:

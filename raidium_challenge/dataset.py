@@ -19,14 +19,13 @@ from torch.utils.data import (
     Sampler,
 )
 
+from raidium_challenge.constants import RAW_DATASET_DIR, PREPROCESSED_DATASET_DIR
 import raidium_challenge.config_classes as cfg
 from raidium_challenge.config_classes import TrainingConfig, DEVICE
 from sklearn.model_selection import train_test_split
 
 
-def mk_segmentation_data_loaders(
-        train_cfg: cfg.TrainingConfig
-    ) -> dict[str, DataLoader]:
+def mk_segmentation_data_loaders(train_cfg: cfg.TrainingConfig) -> dict[str, DataLoader]:
     x_train, y_train, x_test = load_raw_dataset(cfg.DEVICE)
     x_train, y_train = remove_samples_without_labels(x_train, y_train)
     x_train, x_valid, y_train, y_valid = train_test_split(
@@ -193,9 +192,9 @@ def preprocess_batch(batch_dict: dict[str, Tensor]) -> dict[str, Any]:
     return batch_dict
 
 def load_raw_dataset(device: torch.device) -> tuple[Tensor, Tensor, Tensor]:
-    y_train: Tensor = torch.load("dataset/formatted/y-train.pt").to(device=device, dtype=torch.uint8)
-    x_train = torch.load("dataset/formatted/x-train.pt").to(device=device, dtype=torch.uint8)
-    x_test = torch.load("dataset/formatted/x-test.pt").to(device=device, dtype=torch.uint8)
+    y_train: Tensor = torch.load(PREPROCESSED_DATASET_DIR / "y-train.pt").to(device=device, dtype=torch.uint8)
+    x_train = torch.load(PREPROCESSED_DATASET_DIR / "x-train.pt").to(device=device, dtype=torch.uint8)
+    x_test = torch.load(PREPROCESSED_DATASET_DIR / "x-test.pt").to(device=device, dtype=torch.uint8)
     return x_train, y_train, x_test
 
 def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Tensor, Tensor]:
@@ -205,21 +204,21 @@ def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Ten
 def mk_dataset(verbose: bool=True):
     if not os.path.isdir("dataset"):
         if verbose:
-            print("No directoty 'dataset' found, creating dataset...", end="")
+            print(f"No directoty '{RAW_DATASET_DIR}' found, creating dataset...", end="")
         download_raw_dataset()
         format_dataset()
         if verbose:
             print("done")
     elif verbose:
-        print("'dataset' directory already present not doing anythin, if you want to recreate it please delete the directory.")
+        print(f"'{RAW_DATASET_DIR}' directory already present not doing anythin, if you want to recreate it please delete the directory.")
 
 def format_dataset():
-    shutil.rmtree("dataset/formatted", ignore_errors=True)
-    os.makedirs("dataset/formatted", exist_ok=True)
-    format_imgs_into_pt_file(Path("dataset/raw/x-train"))
-    format_imgs_into_pt_file(Path("dataset/raw/x-test"))
+    shutil.rmtree(PREPROCESSED_DATASET_DIR, ignore_errors=True)
+    os.makedirs(PREPROCESSED_DATASET_DIR, exist_ok=True)
+    format_imgs_into_pt_file(RAW_DATASET_DIR / "x-train")
+    format_imgs_into_pt_file(RAW_DATASET_DIR / "x-test")
     y_train_np: pd.DataFrame = (
-        pd.read_csv('dataset/raw/y-train.csv', index_col=0)
+        pd.read_csv(RAW_DATASET_DIR / "y-train.csv", index_col=0)
         .values
         .astype("uint8")
         .T
@@ -227,16 +226,13 @@ def format_dataset():
     )
     torch.save(
         torch.from_numpy(y_train_np),
-        "dataset/formatted/y-train.pt"
+        PREPROCESSED_DATASET_DIR / "y-train.pt"
     )
 
-def format_imgs_into_pt_file(imgs_parent_dir: Path):
+def format_imgs_into_pt_file(imgs_parent_dir: str):
     tensor = load_imgs_as_tensor(imgs_parent_dir)
-    target_file = Path(
-        *imgs_parent_dir.parts[:-2],
-        "formatted",
-        imgs_parent_dir.parts[-1] + ".pt"
-    )
+    target_file = Path(PREPROCESSED_DATASET_DIR, imgs_parent_dir.parts[-1] + ".pt")
+    #print("target file:", target_file)
     torch.save(tensor, target_file)
 
 def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
@@ -253,46 +249,41 @@ def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:
     return imgs
 
 def download_raw_dataset():
-    shutil.rmtree("path/to/directory", ignore_errors=True)
-    raw_pth = Path("dataset/raw")
+    shutil.rmtree(RAW_DATASET_DIR, ignore_errors=True)
+    raw_pth = Path(RAW_DATASET_DIR)
     raw_pth.mkdir(parents=True, exist_ok=True)
     wget_and_unzip(
         "https://challengedata.ens.fr/media/public/train-images.zip",
-        "dataset/raw/x-train",
+        raw_pth / "x-train",
     )
     wget_and_unzip(
         "https://challengedata.ens.fr/media/public/test-images.zip",
-        "dataset/raw/x-test",
+        raw_pth / "x-test",
     )
     wget_to_file(
         "https://challengedata.ens.fr/media/public/annotated_labels.json",
-        "dataset/raw/annotated_labels.json",
+        raw_pth / "annotated_labels.json",
     )
     wget_to_file(
         "https://challengedata.ens.fr/media/public/label_Hnl61pT.csv",
-        "dataset/raw/y-train.csv",
+        raw_pth / "y-train.csv",
     )
 
 def wget_and_unzip(url: str, path: str | Path):
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
-
     zip_path = path.with_suffix(".zip")
-
     # Download
     with requests.get(url, stream=True) as r:
         r.raise_for_status()
         with open(zip_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
-
     # Unzip into the target path
     with zipfile.ZipFile(zip_path, "r") as z:
         z.extractall(path)
-
     # Remove zip file
     zip_path.unlink()
-
     # Detect the subfolder created by the ZIP
     subfolders = [p for p in path.iterdir() if p.is_dir()]
     if len(subfolders) == 1:

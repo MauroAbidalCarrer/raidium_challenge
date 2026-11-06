@@ -15,8 +15,8 @@ from raidium_challenge.config_classes import (
     N_CLASSES,
     DEVICE,
 )
-
 from raidium_challenge import config_classes as cfg
+from raidium_challenge.constants import RAW_DATASET_DIR
 
 
 def ssl_loss(forward_dict: dict[str, Any]) -> dict[str, Tensor]:
@@ -164,7 +164,7 @@ def torch_dice_loss(
 
 
 def get_class_weights() -> torch.Tensor:
-    file_name = "./dataset/raw/annotated_labels.json"
+    file_name = RAW_DATASET_DIR / "annotated_labels.json"
     with open(file_name, 'r') as file :
         data = json.load(file)
 

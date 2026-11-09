@@ -39,7 +39,6 @@ TRAIN_CONFIGS = {
         n_epochs=2000,
         batch_size=32,
         transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
-        eval_interval=10,
         max_loss_norm=3.259898655506028, 
         target_metric = "validation/mae_loss",
         target_objective = "min",

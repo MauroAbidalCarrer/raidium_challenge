@@ -49,7 +49,7 @@ class TrainingConfig:
     include_backgroud: Optional[bool] = True
     dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
     max_loss_norm: float = 1
-    eval_interval: int = 50
+    # eval_interval: int = 50
     ckpt_dir: Path = None
 
     def __post_init__(self):

@@ -171,7 +171,7 @@ class Trainer:
                 loss_dict = criterion(batch | model_output_dict)
             loss_dict["loss_norm"] = torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
-                1.0, # TODO: Hypertune this
+                self.cfg.max_loss_norm,
             )
             for k, v in loss_dict.items():
                 eval_dict[k][batch_i] = v.detach()

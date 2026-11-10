@@ -4,7 +4,7 @@ import torch
 
 import configs as cfg
 from raidium_challenge.config_classes import (
-    ModelfConfig,
+    ModelConfig,
     TrainingConfig,
 )
 from raidium_challenge import dataset, training, models, metrics
@@ -13,10 +13,10 @@ BASELINE_TRAINING_CFG = TrainingConfig(
     n_epochs = 100,
     test_size = 0.2,
     target_metric = "validation/dice_score",
-    target_obejctive = "max",
+    target_objective = "max",
     dice_loss_weight = 1,
     max_loss_norm = 1000, 
-    chpt_dir = "artifacts/experiments/unet_baseline/"
+    ckpt_dir = "artifacts/experiments/unet_baseline/"
 )
 
 def main():

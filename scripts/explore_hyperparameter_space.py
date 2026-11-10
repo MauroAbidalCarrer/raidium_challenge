@@ -1,6 +1,8 @@
+import os
 import sys
 
 import torch
+import pandas as pd
 
 import configs as cfg
 from raidium_challenge.config_classes import (
@@ -23,12 +25,19 @@ WANDB_TAGS = [
     "unet",
     "segmentation",
     "experiment",
+    "baseline",
 ]
 N_TRIALS = 3
+RECORDS_SAVE_DIR = "artifacts/experiments/unet_baseline/records/"
 
 def main():
     for trial_i in range(N_TRIALS):
-        print("Starting trial", trial_i)
+        if len(sys.argv) == 1:
+            wandb_run_name = "baseline_experiment"
+        else:
+            wandb_run_name = sys.argv[1]
+        wandb_run_name += "_" + str(trial_i)
+        print("Starting trial", wandb_run_name)
         train_cfg = BASELINE_TRAINING_CFG
         model_cfg = cfg.MODELS_CFGS["unet"]
         model = models.mk_model_from_cfg(model_cfg)
@@ -44,6 +53,7 @@ def main():
             omptimizer_cfg,
             tags=WANDB_TAGS,
             group="manual_training",
+            run_name=wandb_run_name,
         )
         trainer = training.Trainer(
             model,
@@ -52,12 +62,11 @@ def main():
             lr_scheduler,
             wandb_run,
         )
-        trainer.train_model(data_loaders, criterion)
-
-#def mk_training_conf() -> TrainingConfig:
-#    return TrainingConfig(
-#        batch_size
-#    )
+        records = trainer.train_model(data_loaders, criterion)
+        df = pd.DataFrame.from_records(records)
+        print(df)
+        os.makedirs(RECORDS_SAVE_DIR, exist_ok=True)
+        df.to_parquet(RECORDS_SAVE_DIR + wandb_run_name + ".parquet")
 
 if __name__ == "__main__":
     main()

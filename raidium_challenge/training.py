@@ -81,6 +81,7 @@ class Trainer:
                 print(f"Epoch {self.epoch}, has best new {self.cfg.target_metric} increased from {self.best_target_metric_val} to {self.last_target_metric_val}.")
                 self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "best_checkpoint.pt"))
                 self.best_target_metric_val = self.last_target_metric_val
+        self.wandb_run.finish()
         return self.records
 
     def target_objective_improved(self) -> bool:

@@ -74,9 +74,8 @@ class Trainer:
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
-            if is_last_epoch:
-                with timing.time_to_run("evaluation/total"):
-                    self.evaluate_model(data_loaders, criterion=criterion)
+            with timing.time_to_run("evaluation/total"):
+                self.evaluate_model(data_loaders, criterion=criterion)
             self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "last_checkpoint.pt"))
             if self.target_objective_improved():
                 print(f"Epoch {self.epoch}, has best new {self.cfg.target_metric} increased from {self.best_target_metric_val} to {self.last_target_metric_val}.")
@@ -228,8 +227,6 @@ class Trainer:
             pretrained_pth = pth[:-3]
             model.save_pretrained(pretrained_pth) # remove .pt
             print("Saved checkpoint to", pth, "and as pretrained model at", pretrained_pth)
-        else:
-            print("Saved checkpoint to", pth)
 
 
 def wandb_init(

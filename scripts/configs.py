@@ -18,7 +18,6 @@ TRAIN_CONFIGS = {
         cross_entropy_loss_weight= 1,
         sampling = "weighted",
         dice_loss = "custom",
-        # checkpointing_interval = 2,
         transform = v2.Compose([
             v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
             v2.RandomApply(torch.nn.ModuleList([v2.GaussianBlur(9, sigma=5)])),
@@ -40,8 +39,6 @@ TRAIN_CONFIGS = {
         n_epochs=2000,
         batch_size=32,
         transform=v2.RandomApply(torch.nn.ModuleList([v2.RandomResizedCrop(256, (0.3, 0.5)),])),
-        eval_interval=10,
-        # checkpointing_interval=1,
         max_loss_norm=3.259898655506028, 
         target_metric = "validation/mae_loss",
         target_objective = "min",

@@ -37,7 +37,7 @@ class TrainingConfig:
     batch_size: int = 128
     test_size: float = 0.02
     target_metric: str = None
-    target_objective: Literal["min", "max"] = None #: callable[[float, float], bool] = None
+    target_objective: Literal["min", "max"] = None
     cross_entropy_loss_weight: float = 1
     dice_loss_weight: float = 2
     rec_loss_weight: float = 1
@@ -49,7 +49,7 @@ class TrainingConfig:
     include_backgroud: Optional[bool] = True
     dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
     max_loss_norm: float = 1
-    eval_interval: int = 50
+    # eval_interval: int = 50
     ckpt_dir: Path = None
 
     def __post_init__(self):

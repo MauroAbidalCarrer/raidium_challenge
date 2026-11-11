@@ -67,19 +67,21 @@ class Trainer:
             range(self.epoch, self.cfg.n_epochs),
             description="Training model",
         )
+        with timing.time_to_run("evaluation/total"):
+            self.evaluate_model(data_loaders, criterion=criterion)
         for _ in epoch_it:
             is_last_epoch = self.epoch == self.cfg.n_epochs - 1
-            if self.epoch % self.cfg.eval_interval == 0 or is_last_epoch:
-                with timing.time_to_run("evaluation/total"):
-                    self.evaluate_model(data_loaders, criterion=criterion)
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
+            with timing.time_to_run("evaluation/total"):
+                self.evaluate_model(data_loaders, criterion=criterion)
             self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "last_checkpoint.pt"))
             if self.target_objective_improved():
                 print(f"Epoch {self.epoch}, has best new {self.cfg.target_metric} increased from {self.best_target_metric_val} to {self.last_target_metric_val}.")
                 self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "best_checkpoint.pt"))
                 self.best_target_metric_val = self.last_target_metric_val
+        self.wandb_run.finish()
         return self.records
 
     def target_objective_improved(self) -> bool:
@@ -169,7 +171,7 @@ class Trainer:
                 loss_dict = criterion(batch | model_output_dict)
             loss_dict["loss_norm"] = torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(),
-                1.0, # TODO: Hypertune this
+                self.cfg.max_loss_norm,
             )
             for k, v in loss_dict.items():
                 eval_dict[k][batch_i] = v.detach()
@@ -226,14 +228,13 @@ class Trainer:
             pretrained_pth = pth[:-3]
             model.save_pretrained(pretrained_pth) # remove .pt
             print("Saved checkpoint to", pth, "and as pretrained model at", pretrained_pth)
-        else:
-            print("Saved checkpoint to", pth)
 
 
 def wandb_init(
         *configs: list[Any],
         tags: Optional[list[str]]=[],
-        group: Optional[str]=None
+        group: Optional[str]=None,
+        run_name: Optional[str]=None,
     ) -> wandb.Run:
     cfgs_vars = {}
     for cfg in configs:
@@ -247,6 +248,7 @@ def wandb_init(
         config={**cfgs_vars,},
         tags=tags,
         group=group,
+        name=run_name,
     )
 
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:

@@ -202,7 +202,7 @@ def remove_samples_without_labels(x_train: Tensor, y_train: Tensor) -> tuple[Ten
     return x_train[has_labels_mask], y_train[has_labels_mask]
 
 def mk_dataset(verbose: bool=True):
-    if not os.path.isdir("dataset"):
+    if not os.path.isdir(RAW_DATASET_DIR):
         if verbose:
             print(f"No directoty '{RAW_DATASET_DIR}' found, creating dataset...", end="")
         download_raw_dataset()

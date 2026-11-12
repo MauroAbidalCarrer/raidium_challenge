@@ -43,13 +43,6 @@ export HF_TOKEN=$(cat ~/.vast_hf_token)
 # SSH into host instance
 ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$HOST" <<EOF
 set -e
-export HF_TOKEN=\$(cat ~/.vast_hf_token)
-echo "Cloning dataset repo via HTTPS" \${ARTIFACTS_REPO_ID}
-echo "hugging face token is:" \${HF_TOKEN}
-echo "Dataset repo: $ARTIFACTS_REPO_ID"
-echo "https://__token__:$HF_TOKEN@huggingface.co/datasets/$ARTIFACTS_REPO_ID artifacts"
-git clone https://__token__:$HF_TOKEN@huggingface.co/datasets/$ARTIFACTS_REPO_ID artifacts 
-
 mkdir -p repos
 cd repos
 
@@ -67,16 +60,12 @@ uv sync
 uv run wandb login \$(cat ~/.wandb_api_key)
 rm -f ~/.wandb_api_key
 
+echo "Cloning artifacts repo: $ARTIFACTS_REPO_ID"
+git clone https://__token__:$HF_TOKEN@huggingface.co/datasets/$ARTIFACTS_REPO_ID artifacts 
 
-export HF_TOKEN=\$(cat ~/.vast_hf_token)
-echo "Cloning dataset repo via HTTPS" \${ARTIFACTS_REPO_ID}
-echo "hugging face token is:" \${ARTIFACTS_REPO_ID}
-git clone https://user:\${HF_TOKEN}@huggingface.co/datasets/\${ARTIFACTS_REPO_ID} artifacts 
-
+uv run python -c "from raidium_challenge import dataset; dataset.mk_dataset()"
 cd artifacts
 # ensure git uses token automatically
 git config credential.helper store
 echo "https://user:\$HF_TOKEN@huggingface.co" > ~/.git-credentials
-
-uv run python -c "from raidium_challenge import dataset; dataset.mk_dataset()"
 EOF

@@ -17,13 +17,32 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 echo "Local branch detected: $CURRENT_BRANCH"
 
 # Copy W&B key to remote
-scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    "$HOME/.wandb_api_key" "$HOST":~/
+scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$HOME/.wandb_api_key" "$HOST":~/
+scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$HOME/.vast_hf_token" "$HOST":~/
+#scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "./.env" "$HOST":"~/repos/raidium_challenge/"
 
+scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "./.env" "$HOST":"~/"
+
+
+ENV_FILE=".env"
+
+if [ ! -f "$ENV_FILE" ]; then
+    echo ".env not found"
+    exit 1
+fi
+
+ARTIFACTS_REPO_ID=$(grep -E '^ARTIFACTS_REPO_ID=' "$ENV_FILE" | cut -d= -f2- | tr -d '"')
+if [ -z "$ARTIFACTS_REPO_ID" ]; then
+    echo "ARTIFACTS_REPO_ID not set in .env"
+    exit 1
+fi
+
+echo "Dataset repo: $ARTIFACTS_REPO_ID"
+
+export HF_TOKEN=$(cat ~/.vast_hf_token)
 # SSH into host instance
 ssh -A -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$HOST" <<EOF
 set -e
-
 mkdir -p repos
 cd repos
 
@@ -41,5 +60,12 @@ uv sync
 uv run wandb login \$(cat ~/.wandb_api_key)
 rm -f ~/.wandb_api_key
 
+echo "Cloning artifacts repo: $ARTIFACTS_REPO_ID"
+git clone https://__token__:$HF_TOKEN@huggingface.co/datasets/$ARTIFACTS_REPO_ID artifacts 
+
 uv run python -c "from raidium_challenge import dataset; dataset.mk_dataset()"
+cd artifacts
+# ensure git uses token automatically
+git config credential.helper store
+echo "https://user:\$HF_TOKEN@huggingface.co" > ~/.git-credentials
 EOF

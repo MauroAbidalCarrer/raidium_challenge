@@ -4,45 +4,18 @@ from torch import Tensor
 from raidium_challenge.config_classes import N_CLASSES, DEVICE
 
 
-# @torch.no_grad()
-# def class_wise_dice_score(
-#     y_pred_argmax: Tensor,
-#     y_true: Tensor,
-#     ignore_bckg=True,
-#     n_classes=N_CLASSES,
-# ) -> Tensor:
-#     """Computes the dice score for each class of each image.
-
-#     Args:
-#         y_pred_argmax (Tensor): [B, H, W]
-#         y_true (Tensor): [B, H, W]
-
-#     Returns:
-#         Tensor: [B, C]
-#     """
-#     pred_is_correct = y_pred_argmax == y_true
-#     count_area  = lambda x: x.flatten().bincount(minlength=n_classes)
-#     correct_area= count_area(y_true[pred_is_correct])
-#     y_pred_area = count_area(y_pred_argmax)
-#     y_true_area = count_area(y_true)
-#     total_area  = y_pred_area + y_true_area
-#     dice_score  = 2 * correct_area / total_area
-#     dice_score  = dice_score[:, int(ignore_bckg):] # remove background
-#     return dice_score
-
-
 @torch.no_grad()
 def class_wise_dice_score(
-    y_pred_argmax: Tensor,
+    y_pred: Tensor,
     y_true: Tensor,
     ignore_bckg: bool = True,
-    n_classes: int = 55,
+    n_classes: int = N_CLASSES,
 ) -> Tensor:
     """
     Compute Dice independently for every image and class.
 
     Args:
-        y_pred_argmax: Predicted class indices, shape [B, H, W].
+        y_pred: Predicted class softmax probabilies, shape [B, C, H, W].
         y_true: Ground-truth class indices, shape [B, H, W].
         ignore_bckg: Whether to exclude class 0 from the result.
         n_classes: Total number of classes, INCLUDING background.
@@ -55,77 +28,44 @@ def class_wise_dice_score(
         Classes absent from both prediction and ground truth
         receive NaN, matching the competition metric.
     """
-    batch_size: int = y_true.shape[0]
-    # [B, H, W] -> [B, P]
-    # P = H * W
-    pred: Tensor = y_pred_argmax.reshape(batch_size, -1).long()
-    true: Tensor = y_true.reshape(batch_size, -1).long()
-    # [B, P]
-    correct: Tensor = pred == true
-
-    def count_by_class(labels: Tensor, values: Tensor) -> Tensor:
-        """B: batch size, P: n pixles in imgs, C: n_classes
-
-        Args:
-            labels (Tensor): [B, P]
-            values (Tensor): [B, P]
-
-        Returns:
-            Tensor: [B, C]
-        """
-        counts: Tensor = torch.zeros(
-            batch_size,
-            n_classes,
-            dtype=torch.int64,
-            device=labels.device,
-        )
-        # For every pixel, add its value to the counter
-        # corresponding to its class label.
-        # labels: [B, P] -> class indices
-        # values: [B, P] -> values to accumulate
-        # counts: [B, C] -> output counters
-        counts.scatter_add_(
-            dim=1,
-            index=labels,
-            src=values.long(),
-        )
-        return counts
-    # [B, P] -> [B, C]
-    true_positives: Tensor = count_by_class(true, correct)
-    # [B, P] -> [B, C]
-    pred_area: Tensor = count_by_class(
-        pred,
-        torch.ones_like(pred),
-    )
-    # [B, P] -> [B, C]
-    true_area: Tensor = count_by_class(
-        true,
-        torch.ones_like(true),
-    )
-    # [B, C]
-    denominator: Tensor = pred_area + true_area
-    # Convert to float64 to avoid integer division and
-    # improve numerical precision.
-    dice: Tensor = (
-        2.0 * true_positives.double()
-        / denominator.clamp_min(1).double()
-    )
-    # If both masks are empty for a class, Dice is undefined.
-    # Match the competition notebook by assigning NaN.
-    dice = dice.masked_fill(
-        denominator == 0,
-        float("nan"),
-    )
-    if ignore_bckg:
-        # [B, C] -> [B, C - 1]
-        dice = dice[:, 1:]
+    y_pred = y_pred.argmax(1).flatten(1)
+    y_true = y_true.flatten(1).long()
+    correct = y_pred == y_true
+    true_positives = count_by_class(y_true, correct, n_classes)
+    pred_area = count_by_class(y_pred, torch.ones_like(y_pred), n_classes)
+    true_area = count_by_class(y_true, torch.ones_like(y_true), n_classes)
+    denominator = pred_area + true_area
+    # Convert to float64 to avoid integer division and improve numerical precision.
+    dice = 2.0 * true_positives.double() / denominator.double()
+    dice = dice[:, int(ignore_bckg):] # remove background if needed
     return dice
+
+def count_by_class(cls_idx: Tensor, values: Tensor, n_classes: int) -> Tensor:
+    """B: batch size, P: n pixles in flatten imgs, C: n_classes
+
+    Args:
+        labels (Tensor): [B, P]
+        values (Tensor): [B, P]
+
+    Returns:
+        Tensor: [B, C]
+    """
+    counts = torch.zeros(
+        cls_idx.shape[0],
+        n_classes,
+        dtype=torch.int64,
+        device=cls_idx.device,
+    )
+    # Add value to the counter of the corresponding class.
+    counts.scatter_add_(
+        dim=1,
+        index=cls_idx,
+        src=values.long(),
+    )
+    return counts
 
 
 class DiceScorer:
-    # class_wise_dice_scores_per_image(skip background) numerator: [C] denominator: [1]
-    # dataset_and_class_wise_dice_scores [C]
-    # dataset_wise_dice_score [1]
     def __init__(self,
             n_classes: int=N_CLASSES,
             skip_background: bool=True,
@@ -138,35 +78,22 @@ class DiceScorer:
 
     def reset(self):
         self.n_samples = 0
-        numerator_size = self.n_classes - int(self.skip_bckg)
-        self.class_wise_sample_scores = []
-        # self.class_wise_dice_score_accumulator = (
-        #     torch.empty(
-        #     numerator_size,
-        #     dtype=torch.long,
-        #     device=self.device,
-        #     )
-        #     .div(0) # Divide by zero to get a tensor full of NaNs
-        # )
-        # self.denominator = 0#torch.zeros(numerator_size, dtype=torch.int64, device=self.device)
+        # Memory inneficient but this will help us find which images have the worst/best scores
+        # And also just easier to implement
+        self.class_wise_sample_scores = [] 
 
     @torch.no_grad()
     def step(self, y_pred: Tensor, y_true: Tensor):
-        dice_scores_update = class_wise_dice_score(
-            y_pred.argmax(dim=1),
-            y_true,
-            self.skip_bckg,
-            self.n_classes,
-        )
+        dice_scores_update = class_wise_dice_score(y_pred, y_true, self.skip_bckg, self.n_classes)
         self.class_wise_sample_scores.append(dice_scores_update)
 
     @torch.no_grad()
     def get_dice_score_per_class(self) -> Tensor:
-        return torch.cat(self.class_wise_dice_score_accumulator).nanmean(0) #2 * self.accumulator #/ self.denominator
+        return torch.cat(self.class_wise_sample_scores).nanmean(0)
 
     @torch.no_grad()
     def get_dice_score(self) -> Tensor:
-        return torch.nanmean(self.get_dice_score_per_class())
+        return self.get_dice_score_per_class().nanmean()
 
 
 if __name__ == "__main__":

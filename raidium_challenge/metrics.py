@@ -48,21 +48,21 @@ class SelfSupervisedLoss:
             "rec_loss": rec_loss,
         }
 
-def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray) -> float:
+def dice_pandas(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     Fully vectorized computation of the average Dice over samples and classes (skip background=0).
     This removes the Python loop over samples by using boolean broadcasting.
     Note: memory usage ~ O(S * P * K) where S = n_samples, P = pixels per sample, K = NUM_CLASSES.
     """
     # transpose to get shape (n_samples, n_pixels)
-    y_true = y_true_df.T  # shape (S, P)
-    y_pred = y_pred_df.T  # shape (S, P)
+    #y_true = y_true_df.T  # shape (S, P)
+    #y_pred = y_pred_df.T  # shape (S, P)
 
     if y_true.shape != y_pred.shape:
         raise ValueError("y_true and y_pred must have the same shape after transpose.")
 
     S, P = y_true.shape
-    classes = np.arange(1, N_CLASSES + 1)  # skip background 0, shape (K,)
+    classes = np.arange(1, N_CLASSES)  # skip background 0, shape (K,)
 
     # boolean one-hot along classes: shape (S, P, K)
     gt_mask = (y_true[..., None] == classes)     # True where pixel belongs to class c in GT

@@ -181,8 +181,10 @@ class Trainer:
                 eval_dict[k][batch_i] = v.detach()
             if "y_pred" in model_output_dict:
                 pred = torch.argmax(model_output_dict["y_pred"], dim=1)
-                seg_y_true.append(batch["y_true"].squeeze().cpu().numpy())
-                seg_preds.append(pred.squeeze().cpu().numpy())
+                #seg_y_true.append(batch["y_true"].squeeze().cpu().numpy())
+                #seg_preds.append(pred.squeeze().cpu().numpy())
+                seg_y_true.append(batch["y_true"].cpu().numpy())
+                seg_preds.append(pred.cpu().numpy())
                 self.val_dice_scorer.step(model_output_dict["y_pred"], batch["y_true"])
         eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
         eval_dict["training_samples_seen"] = self.training_samples_seen

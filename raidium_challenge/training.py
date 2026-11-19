@@ -6,10 +6,7 @@ from dataclasses import is_dataclass
 
 import torch
 import wandb
-import numpy as np
-import pandas as pd
 from torch import nn, Tensor
-from monai import metrics as monai_metrics
 from rich.progress import track
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
@@ -103,6 +100,7 @@ class Trainer:
             train_loader: torch.utils.data.DataLoader,
             criterion: cfg.criterion_t,
         ) -> dict[str, float]:
+        self.train_dice_scorer.reset()
         self.model.train()
         n_batches = len(train_loader)
         mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
@@ -117,6 +115,7 @@ class Trainer:
             for k, v in step_dict.items():
                 epochs_steps_dicts[k][batch_i] = v.detach()
         epoch_dict = {k: v.mean().item() for k, v in epochs_steps_dicts.items()}
+        epoch_dict["dice_score"] = self.train_dice_scorer.get_dice_score()
         epoch_dict["training_samples_seen"] = self.training_samples_seen
         epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         self.epoch += 1
@@ -127,6 +126,7 @@ class Trainer:
             batch_dict: dict[str, Any],
             criterion: cfg.criterion_t,
         ) -> dict[str, Tensor]:
+        self.train_dice_scorer.reset()
         if self.cfg.transform:
             batch_dict = self.cfg.transform(batch_dict)
         self.optimizer.zero_grad()
@@ -145,6 +145,7 @@ class Trainer:
         self.training_samples_seen += len(batch_dict["x"])
         self.lr_scheduler.step()
         self.step += 1
+        self.train_dice_scorer.step(model_output_dict["y_pred"], batch_dict["y_true"])
         return {**loss_dict, "loss_norm": loss_norm}
 
     @torch.no_grad
@@ -163,8 +164,6 @@ class Trainer:
         n_batches = len(data_loader)
         mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
         eval_dict: dict[str, Tensor] = defaultdict(mk_epoch_buff)
-        seg_preds = []
-        seg_y_true = []
         self.val_dice_scorer.reset()
         for batch_i, batch in enumerate(data_loader):
             if isinstance(batch, list):
@@ -180,20 +179,16 @@ class Trainer:
             for k, v in loss_dict.items():
                 eval_dict[k][batch_i] = v.detach()
             if "y_pred" in model_output_dict:
-                pred = torch.argmax(model_output_dict["y_pred"], dim=1)
-                #seg_y_true.append(batch["y_true"].squeeze().cpu().numpy())
-                #seg_preds.append(pred.squeeze().cpu().numpy())
-                seg_y_true.append(batch["y_true"].cpu().numpy())
-                seg_preds.append(pred.cpu().numpy())
-                self.val_dice_scorer.step(model_output_dict["y_pred"], batch["y_true"])
+                with timing.time_to_run("evaluation/dice_score"):
+                    self.val_dice_scorer.step(
+                        model_output_dict["y_pred"],
+                        batch["y_true"],
+                    )
         eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
         eval_dict["training_samples_seen"] = self.training_samples_seen
         if len(data_loader) and "y_pred" in model_output_dict:
             with timing.time_to_run("evaluation/dice_score"):
-                seg_preds = np.concat(seg_preds).reshape(-1 , 256 * 256)
-                seg_y_true = np.concat(seg_y_true).reshape(-1, 256 * 256)
-                eval_dict["dice_score"] = metrics.dice_pandas(seg_y_true, seg_preds)
-                eval_dict["new_dice_score"] = self.val_dice_scorer.get_dice_score()
+                eval_dict["dice_score"] = self.val_dice_scorer.get_dice_score()
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):

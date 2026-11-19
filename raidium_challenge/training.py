@@ -52,6 +52,8 @@ class Trainer:
         self.records: list[dict[str, Any]] = []
         self.last_target_metric_val = None
         self.best_target_metric_val = None
+        self.train_dice_scorer = metrics.DiceScorer()
+        self.val_dice_scorer = metrics.DiceScorer()
 
     def train_model(
             self,
@@ -105,6 +107,7 @@ class Trainer:
         n_batches = len(train_loader)
         mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
         epochs_steps_dicts: dict[str, Tensor] = defaultdict(mk_epoch_buff)
+        self.train_dice_scorer.reset()
         for batch_i, batch_dict in enumerate(train_loader):
             if isinstance(batch_dict, list):
                 batch_dict = {"x": batch_dict[0], "y_true": batch_dict[1]}
@@ -162,6 +165,7 @@ class Trainer:
         eval_dict: dict[str, Tensor] = defaultdict(mk_epoch_buff)
         seg_preds = []
         seg_y_true = []
+        self.val_dice_scorer.reset()
         for batch_i, batch in enumerate(data_loader):
             if isinstance(batch, list):
                 batch = {"x": batch[0], "y_true": batch[1]}
@@ -179,6 +183,7 @@ class Trainer:
                 pred = torch.argmax(model_output_dict["y_pred"], dim=1)
                 seg_y_true.append(batch["y_true"].squeeze().cpu().numpy())
                 seg_preds.append(pred.squeeze().cpu().numpy())
+                self.val_dice_scorer.step(model_output_dict["y_pred"], batch["y_true"])
         eval_dict = {k: v.mean().item() for k, v in eval_dict.items()}
         eval_dict["training_samples_seen"] = self.training_samples_seen
         if len(data_loader) and "y_pred" in model_output_dict:
@@ -186,6 +191,7 @@ class Trainer:
                 seg_preds = np.concat(seg_preds).reshape(-1 , 256 * 256)
                 seg_y_true = np.concat(seg_y_true).reshape(-1, 256 * 256)
                 eval_dict["dice_score"] = metrics.dice_pandas(seg_y_true, seg_preds)
+                eval_dict["new_dice_score"] = self.val_dice_scorer.get_dice_score()
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):

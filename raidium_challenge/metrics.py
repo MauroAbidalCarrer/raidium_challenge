@@ -180,12 +180,6 @@ def get_class_weights() -> torch.Tensor:
     class_weights = torch.from_numpy(labels_weights).type(torch.float32)
     return class_weights
 
-import torch
-from torch import Tensor
-
-from raidium_challenge.config_classes import N_CLASSES, DEVICE
-
-
 @torch.no_grad()
 def class_wise_dice_score(
     y_pred: Tensor,

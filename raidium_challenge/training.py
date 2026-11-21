@@ -104,7 +104,7 @@ class Trainer:
         self.train_dice_scorer.reset()
         self.model.train()
         n_batches = len(train_loader)
-        mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
+        mk_epoch_buff = lambda : torch.empty(n_batches, device=constants.DEVICE)
         epochs_steps_dicts: dict[str, Tensor] = defaultdict(mk_epoch_buff)
         self.train_dice_scorer.reset()
         for batch_i, batch_dict in enumerate(train_loader):
@@ -131,7 +131,7 @@ class Trainer:
         if self.cfg.transform:
             batch_dict = self.cfg.transform(batch_dict)
         self.optimizer.zero_grad()
-        with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
+        with torch.autocast(constants.DEVICE.type, torch.bfloat16):
             with timing.time_to_run("training/forward"):
                 model_output_dict = self.model(batch_dict)
             with timing.time_to_run("training/loss"):
@@ -163,14 +163,14 @@ class Trainer:
         ) -> dict[str, Any]:
         self.model = self.model.eval()
         n_batches = len(data_loader)
-        mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
+        mk_epoch_buff = lambda : torch.empty(n_batches, device=constants.DEVICE)
         eval_dict: dict[str, Tensor] = defaultdict(mk_epoch_buff)
         self.val_dice_scorer.reset()
         for batch_i, batch in enumerate(data_loader):
             if isinstance(batch, list):
                 batch = {"x": batch[0], "y_true": batch[1]}
             batch = dataset.preprocess_batch(batch)
-            with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
+            with torch.autocast(constants.DEVICE.type, torch.bfloat16):
                 model_output_dict = self.model(batch)
                 loss_dict = criterion(batch | model_output_dict)
             loss_dict["loss_norm"] = torch.nn.utils.clip_grad_norm_(

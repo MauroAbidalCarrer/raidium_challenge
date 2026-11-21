@@ -22,6 +22,7 @@ from raidium_challenge import (
     timing,
     utils,
     models,
+    constants
 )
 from raidium_challenge import config_classes as cfg
 
@@ -55,7 +56,7 @@ class Trainer:
     def train_model(
             self,
             data_loaders: dict[str, DataLoader],
-            criterion: cfg.criterion_t,
+            criterion: constatns.criterion_t,
         ) -> list[dict[str, Any]]:
         warnings.filterwarnings(
             "ignore",
@@ -98,7 +99,7 @@ class Trainer:
     def train_model_for_single_epoch(
             self,
             train_loader: torch.utils.data.DataLoader,
-            criterion: cfg.criterion_t,
+            criterion: constatns.criterion_t,
         ) -> dict[str, float]:
         self.train_dice_scorer.reset()
         self.model.train()
@@ -124,7 +125,7 @@ class Trainer:
     def perform_training_step(
             self,
             batch_dict: dict[str, Any],
-            criterion: cfg.criterion_t,
+            criterion: constatns.criterion_t,
         ) -> dict[str, Tensor]:
         self.train_dice_scorer.reset()
         if self.cfg.transform:
@@ -149,7 +150,7 @@ class Trainer:
         return {**loss_dict, "loss_norm": loss_norm}
 
     @torch.no_grad
-    def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: cfg.criterion_t):
+    def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: constatns.criterion_t):
         self.model = self.model.eval()
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
         self.wandb_log_dict_with_prefix(valid_eval_dict, "validation")
@@ -158,7 +159,7 @@ class Trainer:
     def evaluate_model_on_single_split(
             self,
             data_loader: DataLoader,
-            criterion: cfg.criterion_t,
+            criterion: constatns.criterion_t,
         ) -> dict[str, Any]:
         self.model = self.model.eval()
         n_batches = len(data_loader)

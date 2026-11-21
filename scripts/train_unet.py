@@ -1,4 +1,4 @@
-import sys
+import argparse
 
 import torch
 
@@ -6,9 +6,19 @@ import configs as cfg
 from raidium_challenge import dataset, training, models, metrics, timing
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("run_name", nargs="?", help="Weights & Biases run name")
+    parser.add_argument("tags", nargs="*", help="Additional Weights & Biases run tags")
+    parser.add_argument("--ckpt", help="Checkpoint to resume training from")
+    return parser.parse_args()
+
+
 def main():
-    if len(sys.argv) > 1:
-        chkpt = torch.load(sys.argv[1], weights_only=False)
+    args = parse_args()
+
+    if args.ckpt:
+        chkpt = torch.load(args.ckpt, weights_only=False)
         train_cfg = cfg.TrainingConfig(**chkpt["train_cfg"])
         model_cfg = cfg.ModelConfig(**chkpt["model_cfg"])
         model = models.mk_model_from_cfg(model_cfg)
@@ -31,7 +41,8 @@ def main():
         model_cfg,
         train_cfg,
         omptimizer_cfg,
-        tags=cfg.WANDB_RUN_TAGS["unet"],
+        name=args.run_name,
+        tags=cfg.WANDB_RUN_TAGS["unet"] + args.tags,
         group="manual_training",
     )
     trainer = training.Trainer(
@@ -41,7 +52,7 @@ def main():
         lr_scheduler,
         wandb_run,
     )
-    if len(sys.argv) > 1:
+    if args.ckpt:
         print("setting epoch, step and training samples seen")
         n_btaches_per_epoch = len(data_loaders["train"])
         samples_seen = chkpt["training_samples_seen"]

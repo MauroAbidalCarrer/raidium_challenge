@@ -3,7 +3,7 @@ import sys
 import torch
 
 import configs as cfg
-from raidium_challenge import dataset, training, models, metrics
+from raidium_challenge import dataset, training, models, metrics, timing
 
 
 def main():
@@ -54,6 +54,7 @@ def main():
         criterion,
         #"checkpoints/unet/{wandb_run_name}/unet_epoch_{epoch}.pt",
     )
+    timing.print_time_dict()
 
 
 if __name__ == "__main__":

@@ -48,43 +48,6 @@ class SelfSupervisedLoss:
             "rec_loss": rec_loss,
         }
 
-def dice_pandas(y_true_df: np.ndarray, y_pred_df: np.ndarray) -> float:
-    """
-    Fully vectorized computation of the average Dice over samples and classes (skip background=0).
-    This removes the Python loop over samples by using boolean broadcasting.
-    Note: memory usage ~ O(S * P * K) where S = n_samples, P = pixels per sample, K = NUM_CLASSES.
-    """
-    # transpose to get shape (n_samples, n_pixels)
-    y_true = y_true_df.T  # shape (S, P)
-    y_pred = y_pred_df.T  # shape (S, P)
-
-    if y_true.shape != y_pred.shape:
-        raise ValueError("y_true and y_pred must have the same shape after transpose.")
-
-    S, P = y_true.shape
-    classes = np.arange(1, N_CLASSES + 1)  # skip background 0, shape (K,)
-
-    # boolean one-hot along classes: shape (S, P, K)
-    gt_mask = (y_true[..., None] == classes)     # True where pixel belongs to class c in GT
-    pred_mask = (y_pred[..., None] == classes)   # True where pixel belongs to class c in pred
-
-    # intersection and sums per (sample, class)
-    intersection = np.sum(pred_mask & gt_mask, axis=1).astype(np.float64)  # (S, K)
-    sum_pred = np.sum(pred_mask, axis=1).astype(np.float64)               # (S, K)
-    sum_gt   = np.sum(gt_mask, axis=1).astype(np.float64)                 # (S, K)
-
-    denom = sum_pred + sum_gt  # (S, K)
-
-    # dice per sample per class; where denom==0 => np.nan
-    with np.errstate(divide='ignore', invalid='ignore'):
-        dice_spc = np.where(denom == 0, np.nan, 2.0 * intersection / denom)  # (S, K)
-
-    # average over samples (ignoring NaNs), then average over classes
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        cls_dices = np.nanmean(dice_spc, axis=0)  # (K,)
-
-    return float(np.nanmean(cls_dices))
 
 class SegmentationLoss:
     def __init__(self, train_cfg: TrainingConfig):
@@ -179,3 +142,95 @@ def get_class_weights() -> torch.Tensor:
     labels_weights = np.insert(labels_weights, 0, 0.0001)
     class_weights = torch.from_numpy(labels_weights).type(torch.float32)
     return class_weights
+
+@torch.no_grad()
+def class_wise_dice_score(
+    y_pred: Tensor,
+    y_true: Tensor,
+    ignore_bckg: bool = True,
+    n_classes: int = N_CLASSES,
+) -> Tensor:
+    """
+    Compute Dice independently for every image and class.
+
+    Args:
+        y_pred: Predicted class softmax probabilies, shape [B, C, H, W].
+        y_true: Ground-truth class indices, shape [B, H, W].
+        ignore_bckg: Whether to exclude class 0 from the result.
+        n_classes: Total number of classes, INCLUDING background.
+
+    Returns:
+        Tensor of shape [B, C], where:
+            B = batch size
+            C = n_classes - int(ignore_bckg)
+
+        Classes absent from both prediction and ground truth
+        receive NaN, matching the competition metric.
+    """
+    y_pred = y_pred.argmax(1).flatten(1)
+    y_true = y_true.flatten(1).long()
+    correct = y_pred == y_true
+    true_positives = count_by_class(y_true, correct, n_classes)
+    pred_area = count_by_class(y_pred, torch.ones_like(y_pred), n_classes)
+    true_area = count_by_class(y_true, torch.ones_like(y_true), n_classes)
+    denominator = pred_area + true_area
+    # Convert to float64 to avoid integer division and improve numerical precision.
+    dice = 2.0 * true_positives.double() / denominator.double()
+    dice = dice[:, int(ignore_bckg):] # remove background if needed
+    return dice
+
+def count_by_class(cls_idx: Tensor, values: Tensor, n_classes: int) -> Tensor:
+    """B: batch size, P: n pixles in flatten imgs, C: n_classes
+
+    Args:
+        labels (Tensor): [B, P]
+        values (Tensor): [B, P]
+
+    Returns:
+        Tensor: [B, C]
+    """
+    counts = torch.zeros(
+        cls_idx.shape[0],
+        n_classes,
+        dtype=torch.int64,
+        device=cls_idx.device,
+    )
+    # Add value to the counter of the corresponding class.
+    counts.scatter_add_(
+        dim=1,
+        index=cls_idx,
+        src=values.long(),
+    )
+    return counts
+
+
+class DiceScorer:
+    def __init__(self,
+            n_classes: int=N_CLASSES,
+            skip_background: bool=True,
+            device=DEVICE,
+        ):
+        self.device = device
+        self.n_classes = n_classes
+        self.skip_bckg = skip_background
+        self.reset()
+
+    def reset(self):
+        self.n_samples = 0
+        # Memory inneficient but this will help us find which images have the worst/best scores
+        # And also just easier to implement
+        self.class_wise_sample_scores = [] 
+
+    @torch.no_grad()
+    def step(self, y_pred: Tensor, y_true: Tensor):
+        dice_scores_update = class_wise_dice_score(y_pred, y_true, self.skip_bckg, self.n_classes)
+        self.class_wise_sample_scores.append(dice_scores_update)
+
+    @torch.no_grad()
+    def get_dice_score_per_class(self) -> Tensor:
+        return torch.cat(self.class_wise_sample_scores).nanmean(0)
+
+    @torch.no_grad()
+    def get_dice_score(self) -> Tensor:
+        return self.get_dice_score_per_class().nanmean()
+

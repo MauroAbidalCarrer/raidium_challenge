@@ -13,7 +13,7 @@ from raidium_challenge.config_classes import (
 TRAIN_CONFIGS = {
     "unet_training": TrainingConfig(
         batch_size=32,
-        n_epochs=600,
+        n_epochs=50,
         dice_loss_weight = 2,
         cross_entropy_loss_weight= 1,
         sampling = "weighted",
@@ -34,6 +34,7 @@ TRAIN_CONFIGS = {
         target_metric = "validation/dice_score",
         target_objective = "max",
         ckpt_dir = "artifacts/checkpoints/unet_supervised",
+        test_size = 0.2,
     ),
     "swin_pretraining": TrainingConfig(
         n_epochs=2000,

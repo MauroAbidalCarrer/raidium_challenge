@@ -1,16 +1,14 @@
 import os
 import shutil
 import zipfile
+from typing import Any
 from pathlib import Path
-from typing import Any, Optional
 
 import torch
 import requests
 import torchvision
-import numpy as np
 import pandas as pd
 from torch import Tensor
-from rich.progress import track
 from torchvision import tv_tensors
 from torch.utils.data import (
     DataLoader,
@@ -19,14 +17,20 @@ from torch.utils.data import (
     Sampler,
 )
 
-from raidium_challenge.constants import RAW_DATASET_DIR, PREPROCESSED_DATASET_DIR
-import raidium_challenge.config_classes as cfg
-from raidium_challenge.config_classes import TrainingConfig, DEVICE
+from raidium_challenge.constants import (
+    X_STD,
+    X_MEAN,
+    DEVICE,
+    N_CLASSES,
+    RAW_DATASET_DIR,
+    PREPROCESSED_DATASET_DIR,
+)
+from raidium_challenge.config_classes import TrainingConfig
 from sklearn.model_selection import train_test_split
 
 
-def mk_segmentation_data_loaders(train_cfg: cfg.TrainingConfig) -> dict[str, DataLoader]:
-    x_train, y_train, x_test = load_raw_dataset(cfg.DEVICE)
+def mk_segmentation_data_loaders(train_cfg: TrainingConfig) -> dict[str, DataLoader]:
+    x_train, y_train, x_test = load_raw_dataset(DEVICE)
     x_train, y_train = remove_samples_without_labels(x_train, y_train)
     x_train, x_valid, y_train, y_valid = train_test_split(
         x_train,
@@ -54,20 +58,12 @@ def mk_segmentation_data_loaders(train_cfg: cfg.TrainingConfig) -> dict[str, Dat
         print("WARNING: No sampling attribute found in train config, using base data loader with shuffle=True.")
         train_dl_kwargs = {"shuffle": True}
     print("train_dl_kwargs:", train_dl_kwargs)
-    y_test_fill = torch.zeros(len(x_test), 256, 256, device=cfg.DEVICE)
+    y_test_fill = torch.zeros(len(x_test), 256, 256, device=DEVICE)
     return {
         "train": mk_dl_from_tensors(x_train, y_train, **train_dl_kwargs), #, collate_fn=collate_segmentation_batch),
         "valid": mk_dl_from_tensors(x_valid, y_valid, batch_size=train_cfg.batch_size), #, collate_fn=collate_segmentation_batch),
         "test":  mk_dl_from_tensors(x_test, y_test_fill, batch_size=train_cfg.batch_size), #, collate_fn=collate_segmentation_batch),
     }
-
-# def collate_segmentation_batch(batch: list[Tensor]) -> dict[str, Tensor]:
-#     print(type(batch))
-#     print(len(batch))
-#     for s in batch:
-#         print(batch.shape)
-#     xs = [sample[0] for sample in batch]
-#     return {"x": torch.cat(xs, dim=0)}
 
 def mk_dl_from_tensors(*tensors: list[Tensor], **data_loader_kwargs) -> DataLoader:
     dataset = TensorDataset(*tensors)
@@ -82,8 +78,8 @@ def mk_samples_weights(y_train_with_labels: Tensor) -> Tensor:
     return sample_weights
 
 class UniformBatchSampler(Sampler):
-    def __init__(self, y_train: Tensor, train_cfg: cfg.TrainingConfig):
-        assert cfg.N_CLASSES <= train_cfg.batch_size, "Batch size should be less or equal to n classes when using unfiorm sampler."
+    def __init__(self, y_train: Tensor, train_cfg: TrainingConfig):
+        assert N_CLASSES <= train_cfg.batch_size, "Batch size should be less or equal to n classes when using unfiorm sampler."
         super().__init__()
         self.train_cfg = train_cfg
         self.n_samples = y_train.shape[0]
@@ -94,12 +90,12 @@ class UniformBatchSampler(Sampler):
         self.batch_idx_buff = torch.empty(
             self.train_cfg.batch_size,
             dtype=torch.long,
-            device=cfg.DEVICE,
+            device=DEVICE,
         )
         self.arange_buff = torch.arange(
-            cfg.N_CLASSES,
+            N_CLASSES,
             dtype=torch.long,
-            device=cfg.DEVICE,
+            device=DEVICE,
         )
 
     def init_samples_per_cls_idx(self, y_train: Tensor) -> Tensor:
@@ -107,9 +103,9 @@ class UniformBatchSampler(Sampler):
         samples_idx_per_classes_lst: list[Tensor] = [torch.nonzero(cls_present).squeeze() for cls_present in cls_mask.T]
         self.max_n_samples_in_cls = max(map(len, samples_idx_per_classes_lst))
         self.samples_per_classes_t = torch.empty(
-            self.max_n_samples_in_cls, cfg.N_CLASSES,
+            self.max_n_samples_in_cls, N_CLASSES,
             dtype=torch.long,
-            device=cfg.DEVICE,
+            device=DEVICE,
         )
         for cls_idx, cls_samples_idx in enumerate(samples_idx_per_classes_lst):
             quotient  = self.max_n_samples_in_cls // len(cls_samples_idx)
@@ -123,31 +119,31 @@ class UniformBatchSampler(Sampler):
             uniform_rand_samp_idx = torch.randint(
                 low=0,
                 high=self.max_n_samples_in_cls,
-                size=(cfg.N_CLASSES, ),
+                size=(N_CLASSES),
                 dtype=torch.long,
-                device=cfg.DEVICE,
+                device=DEVICE,
             )
             # Should use torch.gather 
             uniform_rand_samp_idx = self.samples_per_classes_t[uniform_rand_samp_idx, self.arange_buff]
-            self.batch_idx_buff[:cfg.N_CLASSES] = uniform_rand_samp_idx
+            self.batch_idx_buff[:N_CLASSES] = uniform_rand_samp_idx
             # fill the rest with random classes
-            n_remaining_samples = self.train_cfg.batch_size - cfg.N_CLASSES
+            n_remaining_samples = self.train_cfg.batch_size - N_CLASSES
             uniform_rand_samp_idx = torch.randint(
                 low=0,
                 high=self.max_n_samples_in_cls,
                 size=(n_remaining_samples, ),
                 dtype=torch.long,
-                device=cfg.DEVICE,
+                device=DEVICE,
             )
             uniform_rand_cls_idx = torch.randint(
                 low=0,
-                high=cfg.N_CLASSES,
+                high=N_CLASSES,
                 size=(n_remaining_samples, ),
                 dtype=torch.long,
-                device=cfg.DEVICE,
+                device=DEVICE,
             )
             remaining_unifor_samp_idx = self.samples_per_classes_t[uniform_rand_samp_idx, uniform_rand_cls_idx]
-            self.batch_idx_buff[cfg.N_CLASSES:] = remaining_unifor_samp_idx
+            self.batch_idx_buff[N_CLASSES:] = remaining_unifor_samp_idx
             permute_idx = torch.randperm(len(self.batch_idx_buff))
             yield self.batch_idx_buff[permute_idx]
 
@@ -155,8 +151,8 @@ class UniformBatchSampler(Sampler):
         return self.n_batches
 
 def cls_presence_mask(y_train: Tensor) -> Tensor:
-    cls_presence = torch.empty(y_train.shape[0], cfg.N_CLASSES)
-    for class_idx in range(0, cfg.N_CLASSES):
+    cls_presence = torch.empty(y_train.shape[0], N_CLASSES)
+    for class_idx in range(0, N_CLASSES):
         cls_presence[:, class_idx] = (y_train == class_idx).any(dim=(1, 2))
     return cls_presence
 
@@ -183,11 +179,11 @@ def preprocess_batch(batch_dict: dict[str, Tensor]) -> dict[str, Any]:
     x = x.to(device=DEVICE, dtype=torch.float)
     if x.ndim != 4:
         x = x.unsqueeze(1)
-    batch_dict["x"] = (x - cfg.X_MEAN) / cfg.X_STD
+    batch_dict["x"] = (x - X_MEAN) / X_STD
     if "y_true" in batch_dict:
         batch_dict["y_true"] = (
             tv_tensors.Mask(batch_dict["y_true"])
-            .to(device=cfg.DEVICE, dtype=torch.long)
+            .to(device=DEVICE, dtype=torch.long)
         )
     return batch_dict
 
@@ -232,7 +228,6 @@ def format_dataset():
 def format_imgs_into_pt_file(imgs_parent_dir: str):
     tensor = load_imgs_as_tensor(imgs_parent_dir)
     target_file = Path(PREPROCESSED_DATASET_DIR, imgs_parent_dir.parts[-1] + ".pt")
-    #print("target file:", target_file)
     torch.save(tensor, target_file)
 
 def load_imgs_as_tensor(imgs_parent_dir: Path) -> Tensor:

@@ -237,7 +237,7 @@ def wandb_init(
         *configs: list[Any],
         tags: Optional[list[str]]=[],
         group: Optional[str]=None,
-        run_name: Optional[str]=None,
+        name: Optional[str]=None,
     ) -> wandb.Run:
     cfgs_vars = {}
     for cfg in configs:
@@ -251,7 +251,7 @@ def wandb_init(
         config={**cfgs_vars,},
         tags=tags,
         group=group,
-        name=run_name,
+        name=name,
     )
 
 def mk_lr_scheduler(train_cfg: cfg.TrainingConfig, optimizer: Optimizer) -> LRScheduler:

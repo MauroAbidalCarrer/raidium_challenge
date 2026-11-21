@@ -1,28 +1,12 @@
 from pathlib import Path
 from typing import (
     Optional,
-    Callable,
     Literal,
-    Tuple,
-    Dict,
 )
 from operator import lt, gt
 from dataclasses import dataclass, field
 
-import torch
-from torch import Tensor
 from torchvision.transforms import v2
-
-
-N_CLASSES = 55
-PIXEL_VALUE_CHANNEL_IDX = N_CLASSES
-# The extra channel is for pixel value during ssl
-N_MODEL_OUT_CHANNELS = N_CLASSES + 1
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-criterion_t = Callable[[Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]]
-CONFUSE_MAT_METRICS_NAMES = ["recall", "precision", "f1 score"]
-X_MEAN: float = 14.0816
-X_STD: float = 35.2164
 
 
 @dataclass
@@ -49,7 +33,6 @@ class TrainingConfig:
     include_backgroud: Optional[bool] = True
     dice_loss: Literal["custom", "monai", "generalized_monai"] = "custom"
     max_loss_norm: float = 1
-    # eval_interval: int = 50
     ckpt_dir: Path = None
 
     def __post_init__(self):

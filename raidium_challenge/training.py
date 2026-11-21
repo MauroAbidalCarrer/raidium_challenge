@@ -22,6 +22,7 @@ from raidium_challenge import (
     timing,
     utils,
     models,
+    constants
 )
 from raidium_challenge import config_classes as cfg
 
@@ -55,7 +56,7 @@ class Trainer:
     def train_model(
             self,
             data_loaders: dict[str, DataLoader],
-            criterion: cfg.criterion_t,
+            criterion: constants.criterion_t,
         ) -> list[dict[str, Any]]:
         warnings.filterwarnings(
             "ignore",
@@ -98,12 +99,12 @@ class Trainer:
     def train_model_for_single_epoch(
             self,
             train_loader: torch.utils.data.DataLoader,
-            criterion: cfg.criterion_t,
+            criterion: constants.criterion_t,
         ) -> dict[str, float]:
         self.train_dice_scorer.reset()
         self.model.train()
         n_batches = len(train_loader)
-        mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
+        mk_epoch_buff = lambda : torch.empty(n_batches, device=constants.DEVICE)
         epochs_steps_dicts: dict[str, Tensor] = defaultdict(mk_epoch_buff)
         self.train_dice_scorer.reset()
         for batch_i, batch_dict in enumerate(train_loader):
@@ -124,13 +125,13 @@ class Trainer:
     def perform_training_step(
             self,
             batch_dict: dict[str, Any],
-            criterion: cfg.criterion_t,
+            criterion: constants.criterion_t,
         ) -> dict[str, Tensor]:
         self.train_dice_scorer.reset()
         if self.cfg.transform:
             batch_dict = self.cfg.transform(batch_dict)
         self.optimizer.zero_grad()
-        with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
+        with torch.autocast(constants.DEVICE.type, torch.bfloat16):
             with timing.time_to_run("training/forward"):
                 model_output_dict = self.model(batch_dict)
             with timing.time_to_run("training/loss"):
@@ -149,7 +150,7 @@ class Trainer:
         return {**loss_dict, "loss_norm": loss_norm}
 
     @torch.no_grad
-    def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: cfg.criterion_t):
+    def evaluate_model(self, data_loaders: dict[str, DataLoader], criterion: constants.criterion_t):
         self.model = self.model.eval()
         valid_eval_dict = self.evaluate_model_on_single_split(data_loaders["valid"], criterion)
         self.wandb_log_dict_with_prefix(valid_eval_dict, "validation")
@@ -158,18 +159,18 @@ class Trainer:
     def evaluate_model_on_single_split(
             self,
             data_loader: DataLoader,
-            criterion: cfg.criterion_t,
+            criterion: constants.criterion_t,
         ) -> dict[str, Any]:
         self.model = self.model.eval()
         n_batches = len(data_loader)
-        mk_epoch_buff = lambda : torch.empty(n_batches, device=cfg.DEVICE)
+        mk_epoch_buff = lambda : torch.empty(n_batches, device=constants.DEVICE)
         eval_dict: dict[str, Tensor] = defaultdict(mk_epoch_buff)
         self.val_dice_scorer.reset()
         for batch_i, batch in enumerate(data_loader):
             if isinstance(batch, list):
                 batch = {"x": batch[0], "y_true": batch[1]}
             batch = dataset.preprocess_batch(batch)
-            with torch.autocast(cfg.DEVICE.type, torch.bfloat16):
+            with torch.autocast(constants.DEVICE.type, torch.bfloat16):
                 model_output_dict = self.model(batch)
                 loss_dict = criterion(batch | model_output_dict)
             loss_dict["loss_norm"] = torch.nn.utils.clip_grad_norm_(

@@ -131,13 +131,13 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
             UnetWrapper(
                 spatial_dims=2,
                 in_channels=1,
-                out_channels=cfg.N_CLASSES,
+                out_channels=constants.N_CLASSES,
                 kernel_size=3,
                 strides=tuple(repeat(2, len(channels) - 1)),
                 bias=True,
                 **kwargs,
             )
-            .to(cfg.DEVICE)
+            .to(constants.DEVICE)
         )
     elif model_cfg.architecture == "hf_swin_vit":
         model = MIMWrapper(down_scaling_factor=model_cfg.downscaling, **model_cfg.constructor_kwargs)
@@ -146,7 +146,7 @@ def mk_model_from_cfg(model_cfg: cfg.ModelConfig) -> nn.Module:
     if model_cfg.compile:
         model = torch.compile(model)
     model.cfg = model_cfg
-    model = model.to(cfg.DEVICE)
+    model = model.to(constants.DEVICE)
     return model
 
 def print_params_count(model: nn.Module):

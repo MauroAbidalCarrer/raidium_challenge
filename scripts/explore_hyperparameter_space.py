@@ -21,7 +21,7 @@ BASELINE_OPTIMIZER_CFG = OptimizationConfig(
 )
 BASELINE_TRAINING_CFG = TrainingConfig(
     batch_size = 32,
-    n_epochs = 100,
+    n_epochs = 2,
     test_size = 0.2,
     target_metric = "validation/dice_score",
     target_objective = "max",
@@ -69,7 +69,7 @@ def main():
                     optimizer_cfg,
                     tags=WANDB_TAGS,
                     group="manual_training",
-                    run_name=wandb_run_name,
+                    name=wandb_run_name,
                 )
                 trainer = training.Trainer(
                     model,

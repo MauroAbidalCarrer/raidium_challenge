@@ -231,6 +231,9 @@ class DiceScorer:
         return torch.cat(self.class_wise_sample_scores).nanmean(0)
 
     @torch.no_grad()
-    def get_dice_score(self) -> Tensor:
-        return self.get_dice_score_per_class().nanmean()
+    def get_dice_score(self, tensor_item=True) -> Tensor:
+        tensor_dice_score = self.get_dice_score_per_class().nanmean() 
+        if tensor_item:
+            return tensor_dice_score.item()
+        return tensor_dice_score
 

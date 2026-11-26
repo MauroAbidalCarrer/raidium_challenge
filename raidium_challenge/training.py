@@ -6,6 +6,7 @@ from dataclasses import is_dataclass
 
 import torch
 import wandb
+import pandas as pd
 from torch import nn, Tensor
 from rich.progress import track
 from torch.optim import Optimizer
@@ -57,6 +58,7 @@ class Trainer:
             self,
             data_loaders: dict[str, DataLoader],
             criterion: constants.criterion_t,
+            return_records_as_df=True,
         ) -> list[dict[str, Any]]:
         warnings.filterwarnings(
             "ignore",
@@ -70,7 +72,6 @@ class Trainer:
         with timing.time_to_run("evaluation/total"):
             self.evaluate_model(data_loaders, criterion=criterion)
         for _ in epoch_it:
-            is_last_epoch = self.epoch == self.cfg.n_epochs - 1
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
@@ -78,10 +79,11 @@ class Trainer:
                 self.evaluate_model(data_loaders, criterion=criterion)
             self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "last_checkpoint.pt"))
             if self.target_objective_improved():
-                # print(f"Epoch {self.epoch}, has best new {self.cfg.target_metric} increased from {self.best_target_metric_val} to {self.last_target_metric_val}.")
                 self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "best_checkpoint.pt"))
                 self.best_target_metric_val = self.last_target_metric_val
         self.wandb_run.finish()
+        if return_records_as_df:
+            pd.DataFrame.from_records(self.records, index="epoch")
         return self.records
 
     def target_objective_improved(self) -> bool:
@@ -198,7 +200,6 @@ class Trainer:
                     "class_{i}_dice_score",
                     self.val_dice_scorer.get_dice_score_per_class(),
                 )
-                # print(eval_dict)
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):

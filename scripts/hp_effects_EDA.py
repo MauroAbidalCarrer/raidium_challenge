@@ -85,9 +85,9 @@ def main():
                     wandb_run,
                 )
                 records = trainer.train_model(data_loaders, criterion)
-                df = pd.DataFrame.from_records(records)
+                # df = pd.DataFrame.from_records(records)
                 os.makedirs(RECORDS_SAVE_DIR, exist_ok=True)
-                df.to_parquet(train_cfg.ckpt_dir + "records.parquet")
+                records.to_parquet(train_cfg.ckpt_dir + "records.parquet")
                 within_grp_run_id += 1
 
 def parse_cli_args() -> argparse.Namespace:

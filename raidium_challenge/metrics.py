@@ -234,7 +234,7 @@ class DiceScorer:
 
     @torch.no_grad()
     def get_dice_score(self, tensor_item=True) -> Tensor:
-        tensor_dice_score = self.get_dice_score_per_class().nanmean() 
+        tensor_dice_score = self.get_dice_score_per_class(tolist=False).nanmean()
         if tensor_item:
             return tensor_dice_score.item()
         return tensor_dice_score

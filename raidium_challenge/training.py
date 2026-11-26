@@ -48,7 +48,7 @@ class Trainer:
         dataset.mk_dataset(verbose=False)
         torch.backends.cuda.matmul.fp32_precision = 'ieee'
         utils.setup_seed(train_cfg.random_state)
-        self.records: list[dict[str, Any]] = []
+        self.records: dict[int, dict] = {} #list[dict[str, Any]] = []
         self.last_target_metric_val = None
         self.best_target_metric_val = None
         self.train_dice_scorer = metrics.DiceScorer()
@@ -83,7 +83,7 @@ class Trainer:
                 self.best_target_metric_val = self.last_target_metric_val
         self.wandb_run.finish()
         if return_records_as_df:
-            pd.DataFrame.from_records(self.records, index="epoch")
+            return pd.DataFrame.from_dict(self.records, orient="index")
         return self.records
 
     def target_objective_improved(self) -> bool:
@@ -205,14 +205,14 @@ class Trainer:
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
         data_with_prefix = {prefix + "/" + k: v for k, v in data.items()}
         trainer_data = {
-            "training/epoch": self.epoch,
-            "training/step": self.step,
-            "training/traing_samples_seen": self.training_samples_seen,
-            "training/samples_seen": self.training_samples_seen, # for backward compatibility with legacy code
+            "epoch": self.epoch,
+            "step": self.step,
+            "traing_samples_seen": self.training_samples_seen,
+            "samples_seen": self.training_samples_seen, # for backward compatibility with legacy code
         }
         new_record = data_with_prefix | trainer_data
         wandb.log(data=new_record, step=self.step)
-        self.records.append(new_record)
+        self.records[self.epoch] = new_record | self.records.get(self.epoch, {})
         if self.cfg.target_metric in new_record:
             self.last_target_metric_val = new_record[self.cfg.target_metric]
 

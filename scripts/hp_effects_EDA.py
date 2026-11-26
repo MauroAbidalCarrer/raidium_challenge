@@ -22,13 +22,13 @@ BASELINE_OPTIMIZER_CFG = OptimizationConfig(
 )
 BASELINE_TRAINING_CFG = TrainingConfig(
     batch_size = 32,
-    n_epochs = 2,
+    n_epochs = 75,
     test_size = 0.2,
     target_metric = "validation/dice_score",
     target_objective = "max",
     dice_loss_weight = 1,
     max_loss_norm = 1000, 
-    ckpt_dir = "artifacts/unet_experiments/{run_name}/"
+    ckpt_dir = "artifacts/unet_experiments/{grp_name}/{run_name}/"
 )
 experiments_modifiers = {
     "baseline": {},
@@ -64,15 +64,18 @@ def main():
                 lr_scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, 1)
                 criterion = metrics.SegmentationLoss(train_cfg)
                 data_loaders = dataset.mk_segmentation_data_loaders(train_cfg)
-                run_name = cli_args.grp_name + "_" + experiment_name + str(within_grp_run_id)
-                train_cfg.ckpt_dir = train_cfg.ckpt_dir.format(experiment_name=run_name)
+                run_name = experiment_name + "_" + str(within_grp_run_id)
+                train_cfg.ckpt_dir = train_cfg.ckpt_dir.format(
+                    grp_name=cli_args.grp_name,
+                    run_name=run_name,
+                )
                 wandb_run = training.wandb_init(
                     model_cfg,
                     train_cfg,
                     optimizer_cfg,
                     tags=WANDB_TAGS,
                     group=cli_args.grp_name,
-                    name=run_name,
+                    name=cli_args.grp_name + "_" + run_name,
                 )
                 trainer = training.Trainer(
                     model,
@@ -84,7 +87,7 @@ def main():
                 records = trainer.train_model(data_loaders, criterion)
                 df = pd.DataFrame.from_records(records)
                 os.makedirs(RECORDS_SAVE_DIR, exist_ok=True)
-                df.to_parquet(train_cfg.ckpt_dir + "/" + run_name + "/records.parquet")
+                df.to_parquet(train_cfg.ckpt_dir + "records.parquet")
                 within_grp_run_id += 1
 
 def parse_cli_args() -> argparse.Namespace:
@@ -102,27 +105,25 @@ def iter_over_cfgs(modifiers: dict) -> Iterable[tuple[TrainingConfig, Optimizati
     for k in modifiers.keys():
         if k not in ACCEPTED_KEYS:
             raise ValueError(f"Key {k} in modifiers is not expected, should only be one of {ACCEPTED_KEYS}.")
-    return itertools.product(
+    product_it = itertools.product(
         iter_over_single_cfg(BASELINE_TRAINING_CFG, modifiers.get("training_cfg", {})),
         iter_over_single_cfg(BASELINE_OPTIMIZER_CFG, modifiers.get("optimizer_cfg", {})),
     )
-    # for train_cfg, opt_cfg in cfgs_it:
-    #     train_cfg.chkpt_dir = train_cfg.chkpt_dir.format(experiment_name)
-    #     yield train_cfg, opt_cfg
+    return map(
+        lambda cfgs: (deepcopy(cfgs[0]), deepcopy(cfgs[1])),
+        product_it,
+    )
 
 def iter_over_single_cfg(base_cfg, modifiers: dict) -> Iterable:
-    # print(modifiers)
     if len(modifiers) == 0:
         yield deepcopy(base_cfg)
     for k, v in modifiers.items():
-        print("is Iterable:", isinstance(v, Iterable))
         if isinstance(v, Iterable):
             for v_element in v:
                 cfg = deepcopy(base_cfg)
                 if not hasattr(cfg, k):
                     raise ValueError(f"Erronous key '{k}' for config {cfg.__class__.__name__}.")
                 setattr(cfg, k, v_element)
-                # print("setting", k, "to", v_element, "\n", cfg)
                 yield cfg
         else:
             cfg = deepcopy(base_cfg)

@@ -78,7 +78,7 @@ class Trainer:
                 self.evaluate_model(data_loaders, criterion=criterion)
             self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "last_checkpoint.pt"))
             if self.target_objective_improved():
-                print(f"Epoch {self.epoch}, has best new {self.cfg.target_metric} increased from {self.best_target_metric_val} to {self.last_target_metric_val}.")
+                # print(f"Epoch {self.epoch}, has best new {self.cfg.target_metric} increased from {self.best_target_metric_val} to {self.last_target_metric_val}.")
                 self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "best_checkpoint.pt"))
                 self.best_target_metric_val = self.last_target_metric_val
         self.wandb_run.finish()

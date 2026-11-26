@@ -15,6 +15,7 @@ from raidium_challenge.config_classes import (
 from raidium_challenge import dataset, training, models, metrics
 
 
+EXP_SAVE_ROOT_DIR = "artifacts/unet_experiments/"
 BASELINE_OPTIMIZER_CFG = OptimizationConfig(
     starting_lr = 5e-4,
     beta0 = 0.9,
@@ -28,7 +29,7 @@ BASELINE_TRAINING_CFG = TrainingConfig(
     target_objective = "max",
     dice_loss_weight = 1,
     max_loss_norm = 1000, 
-    ckpt_dir = "artifacts/unet_experiments/{grp_name}/{run_name}/"
+    ckpt_dir = EXP_SAVE_ROOT_DIR + "{grp_name}/{run_name}/"
 )
 experiments_modifiers = {
     "baseline": {},
@@ -48,7 +49,6 @@ WANDB_TAGS = [
     "baseline",
 ]
 N_TRIALS = 1
-RECORDS_SAVE_DIR = "artifacts/experiments/unet_baseline/records/"
 
 
 def main():
@@ -85,7 +85,7 @@ def main():
                     wandb_run,
                 )
                 records = trainer.train_model(data_loaders, criterion)
-                os.makedirs(RECORDS_SAVE_DIR, exist_ok=True)
+                os.makedirs(os.path.dirname(train_cfg.ckpt_dir), exist_ok=True)
                 records.to_parquet(train_cfg.ckpt_dir + "records.parquet")
                 within_grp_run_id += 1
 

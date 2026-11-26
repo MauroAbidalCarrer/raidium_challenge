@@ -22,7 +22,7 @@ BASELINE_OPTIMIZER_CFG = OptimizationConfig(
 )
 BASELINE_TRAINING_CFG = TrainingConfig(
     batch_size = 32,
-    n_epochs = 75,
+    n_epochs = 5,
     test_size = 0.2,
     target_metric = "validation/dice_score",
     target_objective = "max",
@@ -85,9 +85,8 @@ def main():
                     wandb_run,
                 )
                 records = trainer.train_model(data_loaders, criterion)
-                df = pd.DataFrame.from_records(records)
                 os.makedirs(RECORDS_SAVE_DIR, exist_ok=True)
-                df.to_parquet(train_cfg.ckpt_dir + "records.parquet")
+                records.to_parquet(train_cfg.ckpt_dir + "records.parquet")
                 within_grp_run_id += 1
 
 def parse_cli_args() -> argparse.Namespace:

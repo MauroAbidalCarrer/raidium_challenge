@@ -6,6 +6,7 @@ from dataclasses import is_dataclass
 
 import torch
 import wandb
+import pandas as pd
 from torch import nn, Tensor
 from rich.progress import track
 from torch.optim import Optimizer
@@ -47,7 +48,7 @@ class Trainer:
         dataset.mk_dataset(verbose=False)
         torch.backends.cuda.matmul.fp32_precision = 'ieee'
         utils.setup_seed(train_cfg.random_state)
-        self.records: list[dict[str, Any]] = []
+        self.records: dict[int, dict] = {} #list[dict[str, Any]] = []
         self.last_target_metric_val = None
         self.best_target_metric_val = None
         self.train_dice_scorer = metrics.DiceScorer()
@@ -57,6 +58,7 @@ class Trainer:
             self,
             data_loaders: dict[str, DataLoader],
             criterion: constants.criterion_t,
+            return_records_as_df=True,
         ) -> list[dict[str, Any]]:
         warnings.filterwarnings(
             "ignore",
@@ -70,7 +72,6 @@ class Trainer:
         with timing.time_to_run("evaluation/total"):
             self.evaluate_model(data_loaders, criterion=criterion)
         for _ in epoch_it:
-            is_last_epoch = self.epoch == self.cfg.n_epochs - 1
             with timing.time_to_run("training/total"):
                 training_dict = self.train_model_for_single_epoch(data_loaders["train"], criterion)
                 self.wandb_log_dict_with_prefix(training_dict, "training")
@@ -78,10 +79,11 @@ class Trainer:
                 self.evaluate_model(data_loaders, criterion=criterion)
             self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "last_checkpoint.pt"))
             if self.target_objective_improved():
-                # print(f"Epoch {self.epoch}, has best new {self.cfg.target_metric} increased from {self.best_target_metric_val} to {self.last_target_metric_val}.")
                 self.save_checkpoint(os.path.join(self.cfg.ckpt_dir, "best_checkpoint.pt"))
                 self.best_target_metric_val = self.last_target_metric_val
         self.wandb_run.finish()
+        if return_records_as_df:
+            return pd.DataFrame.from_dict(self.records, orient="index")
         return self.records
 
     def target_objective_improved(self) -> bool:
@@ -198,20 +200,19 @@ class Trainer:
                     "class_{i}_dice_score",
                     self.val_dice_scorer.get_dice_score_per_class(),
                 )
-                # print(eval_dict)
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
         data_with_prefix = {prefix + "/" + k: v for k, v in data.items()}
         trainer_data = {
-            "training/epoch": self.epoch,
-            "training/step": self.step,
-            "training/traing_samples_seen": self.training_samples_seen,
-            "training/samples_seen": self.training_samples_seen, # for backward compatibility with legacy code
+            "epoch": self.epoch,
+            "step": self.step,
+            "traing_samples_seen": self.training_samples_seen,
+            "samples_seen": self.training_samples_seen, # for backward compatibility with legacy code
         }
         new_record = data_with_prefix | trainer_data
         wandb.log(data=new_record, step=self.step)
-        self.records.append(new_record)
+        self.records[self.epoch] = new_record | self.records.get(self.epoch, {})
         if self.cfg.target_metric in new_record:
             self.last_target_metric_val = new_record[self.cfg.target_metric]
 

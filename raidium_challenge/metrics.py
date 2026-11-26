@@ -125,7 +125,6 @@ def torch_dice_loss(
         dice = dice * class_weights.unsqueeze(0)
     return 1 - dice.mean()
 
-
 def get_class_weights() -> torch.Tensor:
     file_name = RAW_DATASET_DIR / "annotated_labels.json"
     with open(file_name, 'r') as file :
@@ -227,12 +226,15 @@ class DiceScorer:
         self.class_wise_sample_scores.append(dice_scores_update)
 
     @torch.no_grad()
-    def get_dice_score_per_class(self) -> Tensor:
-        return torch.cat(self.class_wise_sample_scores).nanmean(0)
+    def get_dice_score_per_class(self, tolist=True) -> Tensor:
+        tensor_dice_scores = torch.cat(self.class_wise_sample_scores).nanmean(0)
+        if tolist:
+            return tensor_dice_scores.tolist()
+        return tensor_dice_scores
 
     @torch.no_grad()
     def get_dice_score(self, tensor_item=True) -> Tensor:
-        tensor_dice_score = self.get_dice_score_per_class().nanmean() 
+        tensor_dice_score = self.get_dice_score_per_class(tolist=False).nanmean()
         if tensor_item:
             return tensor_dice_score.item()
         return tensor_dice_score

@@ -117,6 +117,10 @@ class Trainer:
                 epochs_steps_dicts[k][batch_i] = v.detach()
         epoch_dict = {k: v.mean().item() for k, v in epochs_steps_dicts.items()}
         epoch_dict["dice_score"] = self.train_dice_scorer.get_dice_score()
+        epoch_dict |= lst_to_dict_with_frmt_keys(
+            "class_{i}_dice_score",
+            self.train_dice_scorer.get_dice_score_per_class(),
+        )
         epoch_dict["training_samples_seen"] = self.training_samples_seen
         epoch_dict["learning_rate"] = self.lr_scheduler.get_last_lr()[0]
         self.epoch += 1
@@ -190,6 +194,11 @@ class Trainer:
         if len(data_loader) and "y_pred" in model_output_dict:
             with timing.time_to_run("evaluation/dice_score"):
                 eval_dict["dice_score"] = self.val_dice_scorer.get_dice_score()
+                eval_dict |= lst_to_dict_with_frmt_keys(
+                    "class_{i}_dice_score",
+                    self.val_dice_scorer.get_dice_score_per_class(),
+                )
+                # print(eval_dict)
         return eval_dict
 
     def wandb_log_dict_with_prefix(self, data: dict[str, Any], prefix: str):
@@ -267,3 +276,6 @@ def mk_optimizer(model: nn.Module, optimizer_cfg: cfg.OptimizationConfig) -> Opt
     )
     optim.cfg = optimizer_cfg
     return optim
+
+def lst_to_dict_with_frmt_keys(key:str, lst: list) -> dict[str, Any]:
+    return {key.format(i=i): val for i, val in enumerate(lst)}
